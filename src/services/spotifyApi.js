@@ -62,12 +62,27 @@ export const getAccessToken = () => {
   // Redirect to Spotify login
   const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
   
-  console.log('Redirecting to Spotify:', authUrl)
-  console.log('CLIENT_ID:', CLIENT_ID)
+  console.log('Redirecting to Spotify...')
+  console.log('CLIENT_ID:', CLIENT_ID ? `${CLIENT_ID.substring(0, 8)}...` : 'EMPTY')
   console.log('REDIRECT_URI:', REDIRECT_URI)
+  console.log('Full Auth URL:', authUrl)
   
-  // Use window.location.replace to ensure redirect happens
-  window.location.replace(authUrl)
+  // Try multiple methods to ensure redirect happens
+  try {
+    // Method 1: window.location.replace (preferred - doesn't add to history)
+    window.location.replace(authUrl)
+  } catch (e) {
+    console.warn('window.location.replace failed, trying window.location.href:', e)
+    try {
+      // Method 2: window.location.href (fallback)
+      window.location.href = authUrl
+    } catch (e2) {
+      console.error('Both redirect methods failed:', e2)
+      // Method 3: window.open as last resort (might be blocked by popup blocker)
+      window.open(authUrl, '_self')
+    }
+  }
+  
   return null
 }
 

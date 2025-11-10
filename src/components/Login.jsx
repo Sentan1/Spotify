@@ -2,22 +2,30 @@ import { Music } from 'lucide-react'
 import { getAccessToken, getStoredToken, isSpotifyConfigured } from '../services/spotifyApi'
 
 const Login = () => {
-  const handleLogin = () => {
+  const handleLogin = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
     console.log('Login button clicked')
-    // Only redirect if we don't already have a token
-    if (!getStoredToken()) {
-      console.log('No stored token, calling getAccessToken...')
+    console.log('Spotify configured:', isSpotifyConfigured())
+    
+    // Always try to get access token (it will redirect if needed)
+    try {
       const result = getAccessToken()
-      if (result === null) {
-        console.log('getAccessToken returned null, redirect should happen')
+      // If we get here and result is null, redirect should have happened
+      // If result is a token, we already have one
+      if (result) {
+        console.log('Already have token')
+        // Reload to show the player
+        window.location.reload()
       }
-    } else {
-      console.log('Token already exists')
+    } catch (error) {
+      console.error('Error during login:', error)
+      alert('Error during login. Please check the console for details.')
     }
   }
 
   const isConfigured = isSpotifyConfigured()
-  console.log('Spotify configured:', isConfigured)
 
   return (
     <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-spotify-green via-spotify-dark to-black">
