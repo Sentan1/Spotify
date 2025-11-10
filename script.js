@@ -66,17 +66,60 @@ async function performSearch() {
     // Using Deezer API with CORS proxy
     const apiUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=10`;
     
-    // Use allorigins proxy to bypass CORS
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+    // Try multiple proxy options for better reliability
+    const proxies = [
+      `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`
+    ];
     
-    const response = await fetch(proxyUrl);
+    let data = null;
+    let lastError = null;
     
-    if (!response.ok) {
-      throw new Error('Failed to fetch search results');
+    // Try each proxy until one works
+    for (const proxyUrl of proxies) {
+      try {
+        const response = await fetch(proxyUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const proxyData = await response.json();
+        
+        // Handle different proxy response formats
+        if (proxyData.contents) {
+          data = JSON.parse(proxyData.contents);
+        } else if (proxyData.data) {
+          data = proxyData;
+        } else {
+          data = proxyData;
+        }
+        
+        // If we got valid data, break out of the loop
+        if (data && (data.data || data.error)) {
+          break;
+        }
+      } catch (proxyError) {
+        console.log(`Proxy failed: ${proxyUrl}`, proxyError);
+        lastError = proxyError;
+        continue;
+      }
     }
     
-    const proxyData = await response.json();
-    const data = JSON.parse(proxyData.contents);
+    if (!data) {
+      throw new Error('All proxies failed. Please try again.');
+    }
+    
+    // Check for API errors
+    if (data.error) {
+      throw new Error(data.error.message || 'API error');
+    }
 
     if (data.data && data.data.length > 0) {
       displaySearchResults(data.data);
@@ -85,7 +128,7 @@ async function performSearch() {
     }
   } catch (error) {
     console.error('Search error:', error);
-    searchResults.innerHTML = `<div class="error">Error: ${error.message}. Please check your internet connection and try again.</div>`;
+    searchResults.innerHTML = `<div class="error">Error: ${error.message || 'Search failed'}. Please try again in a moment.</div>`;
   }
 }
 
