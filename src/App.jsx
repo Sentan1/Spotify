@@ -3,7 +3,7 @@ import Player from './components/Player'
 import Login from './components/Login'
 import Search from './components/Search'
 import { 
-  getTokenFromUrl,
+  getCodeFromUrl,
   getStoredToken,
   storeToken,
   searchTracks, 
@@ -24,13 +24,12 @@ function App() {
 
   // Initialize token on mount
   useEffect(() => {
-    // Check if we're returning from Spotify auth
-    const urlToken = getTokenFromUrl()
-    if (urlToken) {
-      console.log('✅ Token received from Spotify!')
-      storeToken(urlToken)
-      setToken(urlToken)
-      loadInitialTracks(urlToken)
+    // Check if we're returning from Spotify auth (PKCE flow)
+    const code = getCodeFromUrl()
+    if (code) {
+      console.log('✅ Authorization code received from Spotify!')
+      // getAccessToken will handle the code exchange
+      handleTokenInitialization()
       return
     }
     
@@ -47,13 +46,18 @@ function App() {
     }
     
     // Check for stored token
+    handleTokenInitialization()
+  }, [])
+  
+  // Handle token initialization
+  const handleTokenInitialization = async () => {
     const storedToken = getStoredToken()
     if (storedToken) {
       setToken(storedToken)
       loadInitialTracks(storedToken)
     }
-    // If no token, show login screen (don't redirect automatically)
-  }, [])
+    // If no token and no code, show login screen
+  }
 
   // Load initial tracks (user's top tracks)
   const loadInitialTracks = async (accessToken) => {

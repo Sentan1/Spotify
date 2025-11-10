@@ -1,5 +1,7 @@
-// Spotify API Service
+// Spotify API Service - Using Authorization Code Flow with PKCE
+// This is the recommended flow (Implicit Grant is deprecated)
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
+
 // For GitHub Pages, use the full URL including pathname
 // Make sure it ends with / for GitHub Pages
 const getRedirectUri = () => {
@@ -16,25 +18,43 @@ const getRedirectUri = () => {
 const REDIRECT_URI = getRedirectUri()
 const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
 
-// Get access token from URL hash
-export const getTokenFromUrl = () => {
-  const hash = window.location.hash
-    .substring(1)
-    .split('&')
-    .reduce((initial, item) => {
-      const parts = item.split('=')
-      initial[parts[0]] = decodeURIComponent(parts[1])
-      return initial
-    }, {})
+// PKCE Helper Functions
+const generateRandomString = (length) => {
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const values = crypto.getRandomValues(new Uint8Array(length))
+  return values.reduce((acc, x) => acc + possible[x % possible.length], '')
+}
+
+const sha256 = async (plain) => {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(plain)
+  return window.crypto.subtle.digest('SHA-256', data)
+}
+
+const base64encode = (input) => {
+  return btoa(String.fromCharCode(...new Uint8Array(input)))
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+}
+
+// Get authorization code from URL query params (PKCE flow)
+export const getCodeFromUrl = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const code = urlParams.get('code')
+  const error = urlParams.get('error')
   
-  // Check for errors in hash
-  if (hash.error) {
-    console.error('❌ Spotify auth error in hash:', hash.error, hash.error_description)
+  if (error) {
+    console.error('❌ Spotify auth error:', error, urlParams.get('error_description'))
     return null
   }
   
-  window.location.hash = ''
-  return hash.access_token
+  // Clear the code from URL
+  if (code) {
+    window.history.replaceState({}, document.title, window.location.pathname)
+  }
+  
+  return code
 }
 
 // Get stored token
@@ -59,85 +79,121 @@ export const isTokenExpired = () => {
   return false
 }
 
-// Get access token
-export const getAccessToken = () => {
-  console.log('=== getAccessToken called ===')
-  console.log('CLIENT_ID exists:', !!CLIENT_ID)
-  console.log('CLIENT_ID length:', CLIENT_ID ? CLIENT_ID.length : 0)
-  console.log('CLIENT_ID value (first 10 chars):', CLIENT_ID ? CLIENT_ID.substring(0, 10) : 'EMPTY')
+// Get access token using PKCE flow
+export const getAccessToken = async () => {
+  console.log('=== getAccessToken called (PKCE Flow) ===')
   
   // Check if CLIENT_ID is configured
   if (!CLIENT_ID || CLIENT_ID.trim() === '') {
     console.error('❌ Spotify Client ID is not configured!')
-    console.error('Current CLIENT_ID value:', CLIENT_ID)
-    console.error('Environment variable VITE_SPOTIFY_CLIENT_ID is not set or empty')
-    alert('Spotify Client ID is not configured.\n\nPlease:\n1. Add VITE_SPOTIFY_CLIENT_ID to GitHub Secrets\n2. Redeploy the app\n\nCheck console for details.')
+    alert('Spotify Client ID is not configured.\n\nPlease:\n1. Add VITE_SPOTIFY_CLIENT_ID to GitHub Secrets\n2. Redeploy the app')
     return null
   }
   
-  console.log('✅ CLIENT_ID is configured')
-  
-  const token = getTokenFromUrl() || getStoredToken()
-  console.log('Token from URL:', !!getTokenFromUrl())
-  console.log('Stored token:', !!getStoredToken())
-  
-  if (token && !isTokenExpired()) {
+  // Check for stored token first
+  const storedToken = getStoredToken()
+  if (storedToken && !isTokenExpired()) {
     console.log('✅ Using existing token')
-    storeToken(token)
-    return token
+    return storedToken
   }
   
-  // Redirect to Spotify login
-  // Using 'token' for Implicit Grant Flow (client-side only, no server needed)
-  // Note: Make sure your Spotify app allows Implicit Grant Flow in settings
+  // Check if we have an authorization code (returning from Spotify)
+  const code = getCodeFromUrl()
+  if (code) {
+    console.log('✅ Authorization code received, exchanging for token...')
+    const codeVerifier = localStorage.getItem('code_verifier')
+    if (!codeVerifier) {
+      console.error('❌ Code verifier not found in localStorage')
+      return null
+    }
+    
+    try {
+      const token = await exchangeCodeForToken(code, codeVerifier)
+      if (token) {
+        storeToken(token)
+        localStorage.removeItem('code_verifier') // Clean up
+        return token
+      }
+    } catch (error) {
+      console.error('❌ Error exchanging code for token:', error)
+      return null
+    }
+  }
+  
+  // No code, need to start authorization flow
+  console.log('🔄 Starting PKCE authorization flow...')
+  await initiatePKCEFlow()
+  return null
+}
+
+// Initiate PKCE authorization flow
+const initiatePKCEFlow = async () => {
+  // Generate code verifier and challenge
+  const codeVerifier = generateRandomString(64)
+  const hashed = await sha256(codeVerifier)
+  const codeChallenge = base64encode(hashed)
+  
+  // Store code verifier for later
+  localStorage.setItem('code_verifier', codeVerifier)
+  
+  // Generate state for CSRF protection
+  const state = generateRandomString(16)
+  localStorage.setItem('spotify_auth_state', state)
+  
+  // Build authorization URL
   const params = new URLSearchParams({
+    response_type: 'code',
     client_id: CLIENT_ID,
-    response_type: 'token',
-    redirect_uri: REDIRECT_URI,
     scope: SCOPES,
+    redirect_uri: REDIRECT_URI,
+    state: state,
+    code_challenge_method: 'S256',
+    code_challenge: codeChallenge,
     show_dialog: 'true'
   })
+  
   const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`
   
-  console.log('🔄 Preparing to redirect to Spotify...')
-  console.log('CLIENT_ID:', `${CLIENT_ID.substring(0, 8)}...`)
-  console.log('REDIRECT_URI:', REDIRECT_URI)
-  console.log('Encoded REDIRECT_URI:', encodeURIComponent(REDIRECT_URI))
-  console.log('Full Auth URL:', authUrl)
-  console.log('URL length:', authUrl.length)
+  console.log('🔄 Redirecting to Spotify login page...')
+  console.log('Auth URL:', authUrl)
   
-  // Verify the URL is valid
-  try {
-    new URL(authUrl)
-    console.log('✅ Auth URL is valid')
-  } catch (e) {
-    console.error('❌ Auth URL is invalid:', e)
-    alert('Invalid redirect URL. Please check your configuration.')
-    return null
+  // Redirect to Spotify
+  window.location.href = authUrl
+}
+
+// Exchange authorization code for access token
+const exchangeCodeForToken = async (code, codeVerifier) => {
+  const url = 'https://accounts.spotify.com/api/token'
+  
+  const payload = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: codeVerifier,
+    }),
   }
   
-  console.log('Redirecting NOW to Spotify login page...')
-  console.log('Target URL:', authUrl)
-  console.log('This should take you to accounts.spotify.com')
-  
-  // Store redirect attempt in sessionStorage for debugging
-  sessionStorage.setItem('spotify_redirect_attempt', JSON.stringify({
-    timestamp: Date.now(),
-    redirectUri: REDIRECT_URI,
-    clientId: CLIENT_ID.substring(0, 8) + '...',
-    authUrl: authUrl
-  }))
-  
-  // CRITICAL: Redirect to Spotify's login page
-  // This should take you to accounts.spotify.com, NOT back to GitHub Pages
-  // The redirect_uri parameter is where Spotify sends you BACK after login
-  
-  // Stop any further execution and redirect immediately
-  // Don't return, just redirect
-  window.location.href = authUrl
-  
-  // This should never execute, but just in case:
-  return null
+  try {
+    const response = await fetch(url, payload)
+    const data = await response.json()
+    
+    if (!response.ok) {
+      console.error('❌ Token exchange failed:', data)
+      throw new Error(data.error_description || data.error || 'Token exchange failed')
+    }
+    
+    console.log('✅ Token received successfully')
+    return data.access_token
+  } catch (error) {
+    console.error('❌ Error in token exchange:', error)
+    throw error
+  }
 }
 
 // Check if Spotify is configured

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Music, Copy, ExternalLink } from 'lucide-react'
 import { getAccessToken, getStoredToken, isSpotifyConfigured } from '../services/spotifyApi'
 
@@ -6,8 +6,8 @@ const Login = () => {
   const [showAuthUrl, setShowAuthUrl] = useState(false)
   const [authUrl, setAuthUrl] = useState('')
   
-  // Get the auth URL for direct link fallback
-  const getAuthUrl = () => {
+  // Get the auth URL for direct link fallback (PKCE flow)
+  const getAuthUrl = async () => {
     const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
     const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 
       (window.location.origin + window.location.pathname.replace(/\/$/, ''))
@@ -15,17 +15,49 @@ const Login = () => {
     
     if (!CLIENT_ID) return null
     
+    // Generate PKCE values
+    const generateRandomString = (length) => {
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+      const values = crypto.getRandomValues(new Uint8Array(length))
+      return values.reduce((acc, x) => acc + possible[x % possible.length], '')
+    }
+    
+    const sha256 = async (plain) => {
+      const encoder = new TextEncoder()
+      const data = encoder.encode(plain)
+      return window.crypto.subtle.digest('SHA-256', data)
+    }
+    
+    const base64encode = (input) => {
+      return btoa(String.fromCharCode(...new Uint8Array(input)))
+        .replace(/=/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+    }
+    
+    const codeVerifier = generateRandomString(64)
+    const hashed = await sha256(codeVerifier)
+    const codeChallenge = base64encode(hashed)
+    const state = generateRandomString(16)
+    
+    // Store for later use
+    localStorage.setItem('code_verifier', codeVerifier)
+    localStorage.setItem('spotify_auth_state', state)
+    
     const params = new URLSearchParams({
+      response_type: 'code',
       client_id: CLIENT_ID,
-      response_type: 'token',
-      redirect_uri: REDIRECT_URI,
       scope: SCOPES,
+      redirect_uri: REDIRECT_URI,
+      state: state,
+      code_challenge_method: 'S256',
+      code_challenge: codeChallenge,
       show_dialog: 'true'
     })
     return `https://accounts.spotify.com/authorize?${params.toString()}`
   }
   
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     e.stopPropagation()
     
@@ -48,17 +80,17 @@ const Login = () => {
     }
     
     // Get the auth URL and show it
-    const url = getAuthUrl()
-    if (url) {
-      setAuthUrl(url)
-      setShowAuthUrl(true)
-      console.log('📋 Auth URL displayed on page for copying')
-      console.log('Full Auth URL:', url)
-    }
-    
-    // Always try to get access token (it will redirect to Spotify if needed)
     try {
-      const result = getAccessToken()
+      const url = await getAuthUrl()
+      if (url) {
+        setAuthUrl(url)
+        setShowAuthUrl(true)
+        console.log('📋 Auth URL displayed on page for copying')
+        console.log('Full Auth URL:', url)
+      }
+      
+      // Always try to get access token (it will redirect to Spotify if needed)
+      const result = await getAccessToken()
       console.log('getAccessToken returned:', result ? 'TOKEN' : 'NULL')
       
       if (result) {
@@ -88,7 +120,14 @@ const Login = () => {
   }
 
   const isConfigured = isSpotifyConfigured()
-  const computedAuthUrl = getAuthUrl()
+  const [computedAuthUrl, setComputedAuthUrl] = useState(null)
+  
+  // Pre-generate auth URL on mount
+  useEffect(() => {
+    if (isConfigured) {
+      getAuthUrl().then(url => setComputedAuthUrl(url))
+    }
+  }, [isConfigured])
 
   return (
     <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-spotify-green via-spotify-dark to-black">
