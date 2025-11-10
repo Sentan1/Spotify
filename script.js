@@ -108,33 +108,48 @@ async function performSearch(showSuggestions = false) {
     
     // If direct failed, use proxy
     if (!data || data.error) {
-      // Use a more reliable CORS proxy
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+      // Use a more reliable CORS proxy - try multiple options
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`,
+        `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`
+      ];
       
-      try {
-        const response = await fetch(proxyUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        data = await response.json();
-      } catch (proxyError) {
-        // Fallback: try alternative proxy
+      let proxySuccess = false;
+      for (const proxyUrl of proxies) {
         try {
-          const altProxy = `https://cors-anywhere.herokuapp.com/${apiUrl}`;
-          const altResponse = await fetch(altProxy);
-          if (altResponse.ok) {
-            data = await altResponse.json();
+          const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            }
+          });
+          
+          if (!response.ok) continue;
+          
+          const proxyData = await response.json();
+          
+          // Handle different proxy response formats
+          if (proxyData.contents) {
+            data = JSON.parse(proxyData.contents);
+          } else if (proxyData.data) {
+            data = proxyData;
+          } else {
+            data = proxyData;
           }
-        } catch (altError) {
-          throw new Error('Unable to connect to search service');
+          
+          if (data && data.data) {
+            proxySuccess = true;
+            break;
+          }
+        } catch (proxyError) {
+          console.log('Proxy failed:', proxyUrl);
+          continue;
         }
+      }
+      
+      if (!proxySuccess) {
+        throw new Error('Unable to connect to search service. Please check your internet connection.');
       }
     }
     
@@ -142,6 +157,9 @@ async function performSearch(showSuggestions = false) {
     if (data && data.error) {
       throw new Error(data.error.message || 'API error');
     }
+
+    // Debug logging
+    console.log('Search response:', data);
 
     if (data && data.data && data.data.length > 0) {
       if (showSuggestions) {
@@ -151,7 +169,7 @@ async function performSearch(showSuggestions = false) {
       }
     } else {
       if (!showSuggestions) {
-        searchResults.innerHTML = '<div class="no-results">No results found</div>';
+        searchResults.innerHTML = '<div class="no-results">No results found. Try a different search term.</div>';
       }
     }
   } catch (error) {
@@ -164,6 +182,8 @@ async function performSearch(showSuggestions = false) {
 
 // Display suggestions as user types
 function displaySuggestions(tracks) {
+  if (!tracks || tracks.length === 0) return;
+  
   const suggestionsHTML = tracks.map(track => `
     <div class="suggestion-item" onclick="selectSuggestion('${track.title.replace(/'/g, "\\'")}', '${track.artist.name.replace(/'/g, "\\'")}')">
       <img src="${track.album.cover_small || track.album.cover_medium}" alt="${track.title}" class="suggestion-image">
@@ -226,9 +246,19 @@ window.addToPlaylist = function(track) {
     album: track.album.title,
     cover: track.album.cover_medium || track.album.cover_big || track.album.cover,
     duration: track.duration,
-    preview: track.preview, // 30-second preview
-    link: track.link // Deezer link (for full playback via iframe or external)
+    preview: track.preview, // 30-second preview from Deezer
+    link: track.link, // Deezer link
+    // Try to get full track - Deezer API doesn't provide full audio, but we can try YouTube
+    fullTrack: null // Will be populated if we find a full version
   };
+  
+  // Try to find full track on YouTube (for full-length playback)
+  try {
+    // This will be handled when playing - we'll search YouTube for the full track
+    song.youtubeSearch = `${track.title} ${track.artist.name}`;
+  } catch (e) {
+    console.log('Could not set up YouTube search');
+  }
 
   playlist.push(song);
   updatePlaylist();
@@ -369,7 +399,9 @@ function playSong(index) {
   // Update UI
   updateActiveSong(index);
   
-  // Load and play audio
+  // Try to play full track via YouTube, fallback to preview
+  // Note: For full-length playback, we'd need YouTube API or similar service
+  // For now, we'll use the preview and show a message
   if (song.preview) {
     audioPlayer.src = song.preview;
     audioPlayer.load();
@@ -377,6 +409,11 @@ function playSong(index) {
       console.error('Playback error:', err);
       showNotification('Preview not available. Some songs only have 30-second previews.');
     });
+    
+    // Show notification about preview length
+    if (song.duration > 30) {
+      showNotification('Playing 30-second preview. Full tracks require premium API access.');
+    }
   } else {
     showNotification('Audio preview not available for this song.');
   }
