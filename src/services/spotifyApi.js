@@ -102,8 +102,11 @@ export const getAccessToken = async () => {
   if (code) {
     console.log('✅ Authorization code received, exchanging for token...')
     console.log('Code length:', code.length)
+    console.log('Full code:', code)
     
     const codeVerifier = localStorage.getItem('code_verifier')
+    const storedRedirectUri = localStorage.getItem('spotify_redirect_uri')
+    
     if (!codeVerifier) {
       console.error('❌ Code verifier not found in localStorage')
       console.error('Available localStorage keys:', Object.keys(localStorage))
@@ -112,14 +115,21 @@ export const getAccessToken = async () => {
     }
     
     console.log('Code verifier found, length:', codeVerifier.length)
+    console.log('Stored redirect URI:', storedRedirectUri)
+    console.log('Current REDIRECT_URI:', REDIRECT_URI)
+    
+    // Use the stored redirect URI if available (must match exactly)
+    const redirectUriForExchange = storedRedirectUri || REDIRECT_URI
+    console.log('Using redirect URI for exchange:', redirectUriForExchange)
     
     try {
-      const token = await exchangeCodeForToken(code, codeVerifier)
+      const token = await exchangeCodeForToken(code, codeVerifier, redirectUriForExchange)
       if (token) {
         console.log('✅ Token stored successfully')
         storeToken(token)
         localStorage.removeItem('code_verifier') // Clean up
         localStorage.removeItem('spotify_auth_state') // Clean up
+        localStorage.removeItem('spotify_redirect_uri') // Clean up
         return token
       }
     } catch (error) {
@@ -142,12 +152,17 @@ const initiatePKCEFlow = async () => {
   const hashed = await sha256(codeVerifier)
   const codeChallenge = base64encode(hashed)
   
-  // Store code verifier for later
+  // Store code verifier for later (CRITICAL - must match in token exchange)
   localStorage.setItem('code_verifier', codeVerifier)
+  console.log('✅ Code verifier stored in localStorage, length:', codeVerifier.length)
   
   // Generate state for CSRF protection
   const state = generateRandomString(16)
   localStorage.setItem('spotify_auth_state', state)
+  
+  // Store the redirect URI used so we can match it exactly later
+  localStorage.setItem('spotify_redirect_uri', REDIRECT_URI)
+  console.log('✅ Redirect URI stored:', REDIRECT_URI)
   
   // Build authorization URL
   const params = new URLSearchParams({
@@ -164,30 +179,39 @@ const initiatePKCEFlow = async () => {
   const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`
   
   console.log('🔄 Redirecting to Spotify login page...')
-  console.log('Auth URL:', authUrl)
+  console.log('Auth URL (first 200 chars):', authUrl.substring(0, 200))
+  console.log('Redirect URI in auth URL:', REDIRECT_URI)
   
   // Redirect to Spotify
   window.location.href = authUrl
 }
 
 // Exchange authorization code for access token
-const exchangeCodeForToken = async (code, codeVerifier) => {
+const exchangeCodeForToken = async (code, codeVerifier, redirectUri) => {
   const url = 'https://accounts.spotify.com/api/token'
+  
+  // Use the provided redirect URI (must match EXACTLY what was sent in authorization)
+  // If not provided, use the current REDIRECT_URI
+  const redirectUriForExchange = redirectUri || REDIRECT_URI
   
   console.log('🔄 Exchanging code for token...')
   console.log('Code:', code ? code.substring(0, 20) + '...' : 'MISSING')
   console.log('Code verifier exists:', !!codeVerifier)
-  console.log('Redirect URI:', REDIRECT_URI)
+  console.log('Code verifier length:', codeVerifier ? codeVerifier.length : 0)
+  console.log('Redirect URI for exchange:', redirectUriForExchange)
+  console.log('CLIENT_ID:', CLIENT_ID ? CLIENT_ID.substring(0, 8) + '...' : 'MISSING')
   
-  const bodyParams = new URLSearchParams({
-    client_id: CLIENT_ID,
-    grant_type: 'authorization_code',
-    code: code,
-    redirect_uri: REDIRECT_URI,
-    code_verifier: codeVerifier,
-  })
+  // Build the request body
+  const bodyParams = new URLSearchParams()
+  bodyParams.append('grant_type', 'authorization_code')
+  bodyParams.append('code', code)
+  bodyParams.append('redirect_uri', redirectUriForExchange)
+  bodyParams.append('client_id', CLIENT_ID)
+  bodyParams.append('code_verifier', codeVerifier)
   
-  console.log('Request body params:', bodyParams.toString().replace(/code_verifier=[^&]+/, 'code_verifier=***'))
+  console.log('Request URL:', url)
+  console.log('Request params (without code_verifier):', 
+    bodyParams.toString().replace(/code_verifier=[^&]+/, 'code_verifier=***'))
   
   const payload = {
     method: 'POST',
@@ -205,22 +229,36 @@ const exchangeCodeForToken = async (code, codeVerifier) => {
     console.log('Token exchange response:', data)
     
     if (!response.ok) {
-      console.error('❌ Token exchange failed:', data)
+      console.error('❌ Token exchange failed with 400 error')
+      console.error('Full error response:', JSON.stringify(data, null, 2))
       const errorMsg = data.error_description || data.error || 'Token exchange failed'
       console.error('Error details:', {
         error: data.error,
         error_description: data.error_description,
-        status: response.status
+        status: response.status,
+        redirect_uri_used: redirectUriForExchange,
+        code_length: code.length,
+        code_verifier_length: codeVerifier ? codeVerifier.length : 0
       })
-      throw new Error(errorMsg)
+      
+      // Provide helpful error message
+      if (data.error === 'invalid_grant') {
+        throw new Error('Invalid authorization code. The code may have expired or been used already. Please try logging in again.')
+      } else if (data.error === 'invalid_client') {
+        throw new Error('Invalid client ID. Please check your Spotify app settings.')
+      } else {
+        throw new Error(`${data.error}: ${data.error_description || 'Token exchange failed'}`)
+      }
     }
     
     console.log('✅ Token received successfully')
     return data.access_token
   } catch (error) {
     console.error('❌ Error in token exchange:', error)
-    console.error('Error stack:', error.stack)
-    throw error
+    if (error.message) {
+      throw error
+    }
+    throw new Error('Network error during token exchange. Please check your connection and try again.')
   }
 }
 
