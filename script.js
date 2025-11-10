@@ -63,9 +63,20 @@ async function performSearch() {
   searchResults.innerHTML = '<div class="loading">Searching...</div>';
 
   try {
-    // Using Deezer API (free, no auth required for search)
-    const response = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=10`);
-    const data = await response.json();
+    // Using Deezer API with CORS proxy
+    const apiUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=10`;
+    
+    // Use allorigins proxy to bypass CORS
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+    
+    const response = await fetch(proxyUrl);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch search results');
+    }
+    
+    const proxyData = await response.json();
+    const data = JSON.parse(proxyData.contents);
 
     if (data.data && data.data.length > 0) {
       displaySearchResults(data.data);
@@ -74,9 +85,10 @@ async function performSearch() {
     }
   } catch (error) {
     console.error('Search error:', error);
-    searchResults.innerHTML = '<div class="error">Error searching. Please try again.</div>';
+    searchResults.innerHTML = `<div class="error">Error: ${error.message}. Please check your internet connection and try again.</div>`;
   }
 }
+
 
 function displaySearchResults(tracks) {
   searchResults.innerHTML = tracks.map(track => `
