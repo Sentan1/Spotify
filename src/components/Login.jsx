@@ -1,7 +1,22 @@
-import { Music } from 'lucide-react'
+import { useState } from 'react'
+import { Music, Copy, ExternalLink } from 'lucide-react'
 import { getAccessToken, getStoredToken, isSpotifyConfigured } from '../services/spotifyApi'
 
 const Login = () => {
+  const [showAuthUrl, setShowAuthUrl] = useState(false)
+  const [authUrl, setAuthUrl] = useState('')
+  
+  // Get the auth URL for direct link fallback
+  const getAuthUrl = () => {
+    const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
+    const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 
+      (window.location.origin + window.location.pathname.replace(/\/$/, ''))
+    const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
+    
+    if (!CLIENT_ID) return null
+    return `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
+  }
+  
   const handleLogin = (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -24,6 +39,15 @@ const Login = () => {
       return
     }
     
+    // Get the auth URL and show it
+    const url = getAuthUrl()
+    if (url) {
+      setAuthUrl(url)
+      setShowAuthUrl(true)
+      console.log('📋 Auth URL displayed on page for copying')
+      console.log('Full Auth URL:', url)
+    }
+    
     // Always try to get access token (it will redirect if needed)
     try {
       const result = getAccessToken()
@@ -40,21 +64,18 @@ const Login = () => {
       alert('Error during login: ' + error.message)
     }
   }
-
-  const isConfigured = isSpotifyConfigured()
   
-  // Get the auth URL for direct link fallback
-  const getAuthUrl = () => {
-    const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
-    const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 
-      (window.location.origin + window.location.pathname.replace(/\/$/, ''))
-    const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
-    
-    if (!CLIENT_ID) return null
-    return `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
+  const handleCopyUrl = () => {
+    navigator.clipboard.writeText(authUrl)
+    alert('Auth URL copied to clipboard!')
   }
   
-  const authUrl = getAuthUrl()
+  const handleOpenUrl = () => {
+    window.open(authUrl, '_blank')
+  }
+
+  const isConfigured = isSpotifyConfigured()
+  const computedAuthUrl = getAuthUrl()
 
   return (
     <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-spotify-green via-spotify-dark to-black">
@@ -82,12 +103,46 @@ const Login = () => {
             >
               Login with Spotify
             </button>
-            {authUrl && (
+            {showAuthUrl && authUrl && (
+              <div className="mt-4 p-4 bg-black/60 rounded-lg border border-white/10">
+                <p className="text-white text-sm mb-2 font-semibold">Auth URL (copy this if redirect doesn't work):</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={authUrl}
+                    readOnly
+                    className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded text-white text-xs font-mono"
+                    onClick={(e) => e.target.select()}
+                  />
+                  <button
+                    onClick={handleCopyUrl}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded transition-colors"
+                    title="Copy URL"
+                  >
+                    <Copy size={16} className="text-white" />
+                  </button>
+                  <button
+                    onClick={handleOpenUrl}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded transition-colors"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink size={16} className="text-white" />
+                  </button>
+                </div>
+                <a
+                  href={authUrl}
+                  className="block text-center text-sm text-spotify-green hover:text-[#1ed760] underline"
+                >
+                  Or click here to open directly
+                </a>
+              </div>
+            )}
+            {computedAuthUrl && !showAuthUrl && (
               <a
-                href={authUrl}
+                href={computedAuthUrl}
                 className="block mt-2 text-center text-sm text-gray-400 hover:text-white underline"
                 onClick={(e) => {
-                  console.log('Direct link clicked, redirecting to:', authUrl)
+                  console.log('Direct link clicked, redirecting to:', computedAuthUrl)
                 }}
               >
                 Or click here if button doesn't work
