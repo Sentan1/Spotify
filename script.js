@@ -42,42 +42,70 @@ searchInput.addEventListener('keypress', (e) => {
   }
 });
 
-// Real-time search (debounced)
+// Real-time search with suggestions (debounced)
 searchInput.addEventListener('input', (e) => {
   clearTimeout(searchTimeout);
   const query = e.target.value.trim();
+  
+  // Hide suggestions if input is cleared
+  const suggestionsContainer = document.getElementById('suggestionsContainer');
+  if (suggestionsContainer) {
+    suggestionsContainer.style.display = 'none';
+  }
+  
   if (query.length > 2) {
-    searchTimeout = setTimeout(() => performSearch(), 500);
+    // Show suggestions as user types
+    searchTimeout = setTimeout(() => {
+      performSearch(true); // Show suggestions
+    }, 300);
   } else {
     searchResults.innerHTML = '';
+    if (suggestionsContainer) {
+      suggestionsContainer.style.display = 'none';
+    }
   }
 });
 
-async function performSearch() {
+// Hide suggestions when clicking outside
+document.addEventListener('click', (e) => {
+  const suggestionsContainer = document.getElementById('suggestionsContainer');
+  if (suggestionsContainer && !suggestionsContainer.contains(e.target) && e.target !== searchInput) {
+    suggestionsContainer.style.display = 'none';
+  }
+});
+
+async function performSearch(showSuggestions = false) {
   const query = searchInput.value.trim();
   if (!query) {
     searchResults.innerHTML = '';
     return;
   }
 
-  searchResults.innerHTML = '<div class="loading">Searching...</div>';
+  if (!showSuggestions) {
+    searchResults.innerHTML = '<div class="loading">Searching...</div>';
+  }
 
   try {
-    // Using Deezer API with CORS proxy
-    const apiUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=10`;
-    
-    // Try multiple proxy options for better reliability
-    const proxies = [
-      `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
-      `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`
-    ];
+    // Using Deezer API - try direct first, then proxy
+    const apiUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=${showSuggestions ? 5 : 10}`;
     
     let data = null;
-    let lastError = null;
     
-    // Try each proxy until one works
-    for (const proxyUrl of proxies) {
+    // Try direct API call first (some browsers allow it)
+    try {
+      const directResponse = await fetch(apiUrl);
+      if (directResponse.ok) {
+        data = await directResponse.json();
+      }
+    } catch (directError) {
+      console.log('Direct API call failed, using proxy...');
+    }
+    
+    // If direct failed, use proxy
+    if (!data || data.error) {
+      // Use a more reliable CORS proxy
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+      
       try {
         const response = await fetch(proxyUrl, {
           method: 'GET',
@@ -90,46 +118,75 @@ async function performSearch() {
           throw new Error(`HTTP ${response.status}`);
         }
         
-        const proxyData = await response.json();
-        
-        // Handle different proxy response formats
-        if (proxyData.contents) {
-          data = JSON.parse(proxyData.contents);
-        } else if (proxyData.data) {
-          data = proxyData;
-        } else {
-          data = proxyData;
-        }
-        
-        // If we got valid data, break out of the loop
-        if (data && (data.data || data.error)) {
-          break;
-        }
+        data = await response.json();
       } catch (proxyError) {
-        console.log(`Proxy failed: ${proxyUrl}`, proxyError);
-        lastError = proxyError;
-        continue;
+        // Fallback: try alternative proxy
+        try {
+          const altProxy = `https://cors-anywhere.herokuapp.com/${apiUrl}`;
+          const altResponse = await fetch(altProxy);
+          if (altResponse.ok) {
+            data = await altResponse.json();
+          }
+        } catch (altError) {
+          throw new Error('Unable to connect to search service');
+        }
       }
     }
     
-    if (!data) {
-      throw new Error('All proxies failed. Please try again.');
-    }
-    
     // Check for API errors
-    if (data.error) {
+    if (data && data.error) {
       throw new Error(data.error.message || 'API error');
     }
 
-    if (data.data && data.data.length > 0) {
-      displaySearchResults(data.data);
+    if (data && data.data && data.data.length > 0) {
+      if (showSuggestions) {
+        displaySuggestions(data.data);
+      } else {
+        displaySearchResults(data.data);
+      }
     } else {
-      searchResults.innerHTML = '<div class="no-results">No results found</div>';
+      if (!showSuggestions) {
+        searchResults.innerHTML = '<div class="no-results">No results found</div>';
+      }
     }
   } catch (error) {
     console.error('Search error:', error);
-    searchResults.innerHTML = `<div class="error">Error: ${error.message || 'Search failed'}. Please try again in a moment.</div>`;
+    if (!showSuggestions) {
+      searchResults.innerHTML = `<div class="error">Error: ${error.message || 'Search failed'}. Please try again.</div>`;
+    }
   }
+}
+
+// Display suggestions as user types
+function displaySuggestions(tracks) {
+  const suggestionsHTML = tracks.map(track => `
+    <div class="suggestion-item" onclick="selectSuggestion('${track.title.replace(/'/g, "\\'")}', '${track.artist.name.replace(/'/g, "\\'")}')">
+      <img src="${track.album.cover_small || track.album.cover_medium}" alt="${track.title}" class="suggestion-image">
+      <div class="suggestion-info">
+        <div class="suggestion-title">${track.title}</div>
+        <div class="suggestion-artist">${track.artist.name}</div>
+      </div>
+    </div>
+  `).join('');
+  
+  // Show suggestions above search results
+  let suggestionsContainer = document.getElementById('suggestionsContainer');
+  if (!suggestionsContainer) {
+    suggestionsContainer = document.createElement('div');
+    suggestionsContainer.id = 'suggestionsContainer';
+    suggestionsContainer.className = 'suggestions-container';
+    searchInput.parentElement.appendChild(suggestionsContainer);
+  }
+  
+  suggestionsContainer.innerHTML = suggestionsHTML;
+  suggestionsContainer.style.display = 'block';
+}
+
+// Select a suggestion
+window.selectSuggestion = function(title, artist) {
+  searchInput.value = `${title} ${artist}`;
+  document.getElementById('suggestionsContainer').style.display = 'none';
+  performSearch(false);
 }
 
 
