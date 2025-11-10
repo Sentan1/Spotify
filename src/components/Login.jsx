@@ -9,8 +9,16 @@ const Login = () => {
   // Get the auth URL for direct link fallback (PKCE flow)
   const getAuthUrl = async () => {
     const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
-    const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 
-      (window.location.origin + window.location.pathname.replace(/\/$/, ''))
+    // Ensure redirect URI ends with / for GitHub Pages (must match spotifyApi.js)
+    let REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI
+    if (!REDIRECT_URI) {
+      const origin = window.location.origin
+      const pathname = window.location.pathname
+      const basePath = pathname.endsWith('/') ? pathname : pathname + '/'
+      REDIRECT_URI = origin + basePath
+    } else {
+      REDIRECT_URI = REDIRECT_URI.endsWith('/') ? REDIRECT_URI : REDIRECT_URI + '/'
+    }
     const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
     
     if (!CLIENT_ID) return null
@@ -40,9 +48,10 @@ const Login = () => {
     const codeChallenge = base64encode(hashed)
     const state = generateRandomString(16)
     
-    // Store for later use
+    // Store for later use (must match what spotifyApi.js expects)
     localStorage.setItem('code_verifier', codeVerifier)
     localStorage.setItem('spotify_auth_state', state)
+    localStorage.setItem('spotify_redirect_uri', REDIRECT_URI) // Store exact redirect URI used
     
     const params = new URLSearchParams({
       response_type: 'code',

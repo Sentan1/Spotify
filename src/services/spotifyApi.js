@@ -202,7 +202,11 @@ const exchangeCodeForToken = async (code, codeVerifier, redirectUri) => {
   
   // Use the provided redirect URI (must match EXACTLY what was sent in authorization)
   // If not provided, use the current REDIRECT_URI
-  const redirectUriForExchange = redirectUri || REDIRECT_URI
+  // Ensure it ends with / to match what we sent in authorization
+  let redirectUriForExchange = redirectUri || REDIRECT_URI
+  if (!redirectUriForExchange.endsWith('/')) {
+    redirectUriForExchange = redirectUriForExchange + '/'
+  }
   
   console.log('🔄 Exchanging code for token...')
   console.log('Code:', code ? code.substring(0, 20) + '...' : 'MISSING')
@@ -233,31 +237,54 @@ const exchangeCodeForToken = async (code, codeVerifier, redirectUri) => {
   
   try {
     const response = await fetch(url, payload)
-    const data = await response.json()
+    
+    // Try to parse JSON, but handle non-JSON responses
+    let data
+    try {
+      const text = await response.text()
+      data = text ? JSON.parse(text) : {}
+    } catch (parseError) {
+      console.error('Failed to parse response as JSON:', parseError)
+      data = { error: 'parse_error', error_description: 'Could not parse response from Spotify' }
+    }
     
     console.log('Token exchange response status:', response.status)
     console.log('Token exchange response:', data)
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()))
     
     if (!response.ok) {
-      console.error('❌ Token exchange failed with 400 error')
+      console.error('❌ Token exchange failed with', response.status, 'error')
       console.error('Full error response:', JSON.stringify(data, null, 2))
-      const errorMsg = data.error_description || data.error || 'Token exchange failed'
       console.error('Error details:', {
         error: data.error,
         error_description: data.error_description,
         status: response.status,
         redirect_uri_used: redirectUriForExchange,
-        code_length: code.length,
-        code_verifier_length: codeVerifier ? codeVerifier.length : 0
+        code_length: code ? code.length : 0,
+        code_verifier_length: codeVerifier ? codeVerifier.length : 0,
+        code_verifier_first_10: codeVerifier ? codeVerifier.substring(0, 10) : 'MISSING'
       })
+      
+      // Show detailed error to user
+      const errorDetails = `Spotify Error: ${data.error || 'Unknown error'}\n\n` +
+        `Description: ${data.error_description || 'No description provided'}\n\n` +
+        `Redirect URI used: ${redirectUriForExchange}\n\n` +
+        `Please check:\n` +
+        `1. Redirect URI in Spotify Dashboard matches: ${redirectUriForExchange}\n` +
+        `2. Redirect URI must end with /\n` +
+        `3. Try clearing browser cache and localStorage`
+      
+      console.error('❌', errorDetails)
       
       // Provide helpful error message
       if (data.error === 'invalid_grant') {
         throw new Error('Invalid authorization code. The code may have expired or been used already. Please try logging in again.')
       } else if (data.error === 'invalid_client') {
         throw new Error('Invalid client ID. Please check your Spotify app settings.')
+      } else if (data.error === 'invalid_request') {
+        throw new Error(`Invalid request: ${data.error_description || 'Check redirect URI and parameters'}`)
       } else {
-        throw new Error(`${data.error}: ${data.error_description || 'Token exchange failed'}`)
+        throw new Error(`${data.error || 'Token exchange failed'}: ${data.error_description || 'Unknown error'}`)
       }
     }
     
