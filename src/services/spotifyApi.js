@@ -83,7 +83,15 @@ export const getAccessToken = () => {
   
   // Redirect to Spotify login
   // Using 'token' for Implicit Grant Flow (client-side only, no server needed)
-  const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`
+  // Note: Make sure your Spotify app allows Implicit Grant Flow in settings
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    response_type: 'token',
+    redirect_uri: REDIRECT_URI,
+    scope: SCOPES,
+    show_dialog: 'true'
+  })
+  const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`
   
   console.log('🔄 Preparing to redirect to Spotify...')
   console.log('CLIENT_ID:', `${CLIENT_ID.substring(0, 8)}...`)

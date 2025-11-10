@@ -14,7 +14,15 @@ const Login = () => {
     const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
     
     if (!CLIENT_ID) return null
-    return `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`
+    
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      response_type: 'token',
+      redirect_uri: REDIRECT_URI,
+      scope: SCOPES,
+      show_dialog: 'true'
+    })
+    return `https://accounts.spotify.com/authorize?${params.toString()}`
   }
   
   const handleLogin = (e) => {
