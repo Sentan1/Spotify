@@ -14,7 +14,7 @@ const Login = () => {
     const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
     
     if (!CLIENT_ID) return null
-    return `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
+    return `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`
   }
   
   const handleLogin = (e) => {
@@ -48,7 +48,7 @@ const Login = () => {
       console.log('Full Auth URL:', url)
     }
     
-    // Always try to get access token (it will redirect if needed)
+    // Always try to get access token (it will redirect to Spotify if needed)
     try {
       const result = getAccessToken()
       console.log('getAccessToken returned:', result ? 'TOKEN' : 'NULL')
@@ -57,7 +57,9 @@ const Login = () => {
         console.log('✅ Already have token, reloading page...')
         window.location.reload()
       } else {
-        console.log('⏳ Redirect initiated...')
+        console.log('⏳ Redirecting to Spotify login page...')
+        // getAccessToken() should have triggered the redirect
+        // If we get here, the redirect should be happening
       }
     } catch (error) {
       console.error('❌ Error during login:', error)

@@ -82,7 +82,8 @@ export const getAccessToken = () => {
   }
   
   // Redirect to Spotify login
-  const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
+  // Using 'token' for Implicit Grant Flow (client-side only, no server needed)
+  const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&show_dialog=true`
   
   console.log('🔄 Preparing to redirect to Spotify...')
   console.log('CLIENT_ID:', `${CLIENT_ID.substring(0, 8)}...`)
@@ -101,23 +102,28 @@ export const getAccessToken = () => {
     return null
   }
   
-  console.log('Redirecting NOW...')
+  console.log('Redirecting NOW to Spotify login page...')
+  console.log('Target URL:', authUrl)
   
   // Store redirect attempt in sessionStorage for debugging
   sessionStorage.setItem('spotify_redirect_attempt', JSON.stringify({
     timestamp: Date.now(),
     redirectUri: REDIRECT_URI,
-    clientId: CLIENT_ID.substring(0, 8) + '...'
+    clientId: CLIENT_ID.substring(0, 8) + '...',
+    authUrl: authUrl
   }))
   
-  // Force immediate redirect
-  window.location.href = authUrl
-  
-  // Fallback after a short delay (shouldn't execute if redirect works)
-  setTimeout(() => {
-    console.warn('⚠️ Redirect may have failed, trying window.location.replace...')
+  // CRITICAL: Redirect to Spotify's login page
+  // This should take you to accounts.spotify.com, NOT back to GitHub Pages
+  // The redirect_uri parameter is where Spotify sends you BACK after login
+  try {
+    // Use window.location.href for immediate redirect
+    window.location.href = authUrl
+  } catch (error) {
+    console.error('Redirect error:', error)
+    // Fallback: try window.location.replace
     window.location.replace(authUrl)
-  }, 100)
+  }
   
   return null
 }
