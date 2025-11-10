@@ -350,6 +350,12 @@ body::before {
 
 .error {
   color: #f87171;
+  padding: 20px;
+  text-align: center;
+}
+
+.error p {
+  margin: 5px 0;
 }
 
 /* RIGHT SIDE */

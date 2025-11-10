@@ -153,36 +153,92 @@ async function performSearch(showSuggestions = false) {
       // Direct failed, will try proxy
     }
     
-    // If direct failed, use fastest proxy
+    // If direct failed, try multiple proxies in parallel (race condition)
     if (!data || data.error) {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+      // List of reliable CORS proxies to try
+      const proxyUrls = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`,
+        `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`,
+        `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(apiUrl)}`
+      ];
       
-      try {
-        const response = await fetch(proxyUrl, {
+      // Create promises for all proxies
+      const proxyPromises = proxyUrls.map(proxyUrl => 
+        fetch(proxyUrl, {
           signal: currentSearchController.signal,
-          headers: { 'Accept': 'application/json' }
-        });
+          headers: { 'Accept': 'application/json' },
+          mode: 'cors'
+        })
+        .then(response => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then(proxyData => {
+          // Handle different proxy response formats
+          if (proxyData.contents) {
+            try {
+              return JSON.parse(proxyData.contents);
+            } catch {
+              return proxyData.contents;
+            }
+          } else if (proxyData.data) {
+            return proxyData;
+          } else if (Array.isArray(proxyData)) {
+            return { data: proxyData };
+          } else {
+            return proxyData;
+          }
+        })
+        .catch(() => null) // Return null on error, don't throw
+      );
+      
+      // Race all proxies - use first successful response
+      try {
+        const results = await Promise.allSettled(proxyPromises);
         
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        // Find first successful result
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value) {
+            const proxyData = result.value;
+            if (proxyData && proxyData.data && Array.isArray(proxyData.data) && proxyData.data.length > 0) {
+              data = proxyData;
+              clearTimeout(timeoutId);
+              break;
+            }
+          }
         }
         
-        const proxyData = await response.json();
-        
-        // Handle proxy response format
-        if (proxyData.contents) {
-          data = JSON.parse(proxyData.contents);
-        } else if (proxyData.data) {
-          data = proxyData;
-        } else {
-          data = proxyData;
+        // If no proxy worked, try one more time with a different approach
+        if (!data || !data.data) {
+          // Last resort: try with JSONP-like approach or different endpoint
+          const lastResortUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}&callback=?`;
+          try {
+            const lastResort = await fetch(lastResortUrl.replace('callback=?', ''), {
+              signal: currentSearchController.signal,
+              headers: { 'Accept': 'application/json' }
+            });
+            if (lastResort.ok) {
+              const lastResortData = await lastResort.json();
+              if (lastResortData.contents) {
+                data = JSON.parse(lastResortData.contents);
+                clearTimeout(timeoutId);
+              }
+            }
+          } catch {
+            // Ignore last resort errors
+          }
         }
         
-        clearTimeout(timeoutId);
+        if (!data || !data.data) {
+          clearTimeout(timeoutId);
+          throw new Error('Search service unavailable. Please check your internet connection or try again later.');
+        }
       } catch (proxyError) {
         if (proxyError.name === 'AbortError') throw proxyError;
         clearTimeout(timeoutId);
-        throw new Error('Unable to connect to search service');
+        throw new Error('Unable to connect to search service. This may be due to network restrictions or proxy unavailability.');
       }
     }
     
@@ -217,7 +273,23 @@ async function performSearch(showSuggestions = false) {
     }
     console.error('Search error:', error);
     if (!showSuggestions) {
-      searchResults.innerHTML = `<div class="error">Error: ${error.message || 'Search failed'}. Please try again.</div>`;
+      let errorMessage = error.message || 'Search failed';
+      
+      // Provide helpful error messages
+      if (errorMessage.includes('network') || errorMessage.includes('connection')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (errorMessage.includes('CORS') || errorMessage.includes('proxy')) {
+        errorMessage = 'Connection blocked. This may be due to network restrictions. Please try again or use a different network.';
+      }
+      
+      searchResults.innerHTML = `
+        <div class="error">
+          <p>${errorMessage}</p>
+          <p style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;">
+            💡 Tip: Try refreshing the page or using a different network connection.
+          </p>
+        </div>
+      `;
     }
   } finally {
     currentSearchController = null;
