@@ -1,9 +1,12 @@
 import { Spotify } from 'lucide-react'
-import { getAccessToken } from '../services/spotifyApi'
+import { getAccessToken, getStoredToken } from '../services/spotifyApi'
 
 const Login = () => {
   const handleLogin = () => {
-    getAccessToken()
+    // Only redirect if we don't already have a token
+    if (!getStoredToken()) {
+      getAccessToken()
+    }
   }
 
   return (

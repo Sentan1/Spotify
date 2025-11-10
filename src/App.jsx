@@ -3,8 +3,9 @@ import Player from './components/Player'
 import Login from './components/Login'
 import Search from './components/Search'
 import { 
-  getAccessToken, 
-  getStoredToken, 
+  getTokenFromUrl,
+  getStoredToken,
+  storeToken,
   searchTracks, 
   getTopTracks,
   removeToken 
@@ -23,11 +24,22 @@ function App() {
 
   // Initialize token on mount
   useEffect(() => {
-    const accessToken = getAccessToken() || getStoredToken()
-    if (accessToken) {
-      setToken(accessToken)
-      loadInitialTracks(accessToken)
+    // Check if we're returning from Spotify auth
+    const urlToken = getTokenFromUrl()
+    if (urlToken) {
+      storeToken(urlToken)
+      setToken(urlToken)
+      loadInitialTracks(urlToken)
+      return
     }
+    
+    // Check for stored token
+    const storedToken = getStoredToken()
+    if (storedToken) {
+      setToken(storedToken)
+      loadInitialTracks(storedToken)
+    }
+    // If no token, show login screen (don't redirect automatically)
   }, [])
 
   // Load initial tracks (user's top tracks)
@@ -144,7 +156,7 @@ function App() {
   }
 
   // Show loading state
-  if (isLoading && tracks.length === 0) {
+  if (isLoading && tracks.length === 0 && token) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-black">
         <div className="text-center">
@@ -155,8 +167,30 @@ function App() {
     )
   }
 
-  // Show message if no tracks
-  if (!currentTrack || tracks.length === 0) {
+  // Show message if no tracks but have token
+  if (token && (!currentTrack || tracks.length === 0) && !isLoading) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center bg-black">
+        <div className="text-center p-8">
+          <p className="text-white text-xl mb-4">No tracks available</p>
+          <button
+            onClick={() => setShowSearch(true)}
+            className="px-6 py-3 bg-spotify-green hover:bg-[#1ed760] text-black font-bold rounded-full transition-all"
+          >
+            Search for Songs
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render player if no token and no tracks - but we should have shown login or loading
+  // This is a safety check
+  if (!token) {
+    return <Login />
+  }
+  
+  if (!currentTrack && !isLoading) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-black">
         <div className="text-center p-8">
