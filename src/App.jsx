@@ -27,10 +27,23 @@ function App() {
     // Check if we're returning from Spotify auth
     const urlToken = getTokenFromUrl()
     if (urlToken) {
+      console.log('✅ Token received from Spotify!')
       storeToken(urlToken)
       setToken(urlToken)
       loadInitialTracks(urlToken)
       return
+    }
+    
+    // Check for error in URL (Spotify redirects back with error)
+    const urlParams = new URLSearchParams(window.location.search)
+    const error = urlParams.get('error')
+    const errorDescription = urlParams.get('error_description')
+    
+    if (error) {
+      console.error('❌ Spotify auth error:', error, errorDescription)
+      alert(`Spotify authentication error: ${error}\n${errorDescription || ''}\n\nPlease check your Spotify app settings.`)
+      // Clear the error from URL
+      window.history.replaceState({}, document.title, window.location.pathname)
     }
     
     // Check for stored token

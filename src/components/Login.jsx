@@ -64,11 +64,14 @@ const Login = () => {
       if (result) {
         console.log('✅ Already have token, reloading page...')
         window.location.reload()
-      } else {
-        console.log('⏳ Redirecting to Spotify login page...')
-        // getAccessToken() should have triggered the redirect
-        // If we get here, the redirect should be happening
+        return
       }
+      
+      // If we get here and result is null, getAccessToken should have redirected
+      // But if we're still here, the redirect didn't work
+      console.warn('⚠️ Redirect should have happened but we're still here')
+      console.log('Auth URL was:', url)
+      alert('Redirect failed. Please try clicking the direct link below or copy the URL manually.')
     } catch (error) {
       console.error('❌ Error during login:', error)
       alert('Error during login: ' + error.message)

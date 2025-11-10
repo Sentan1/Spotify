@@ -27,6 +27,12 @@ export const getTokenFromUrl = () => {
       return initial
     }, {})
   
+  // Check for errors in hash
+  if (hash.error) {
+    console.error('❌ Spotify auth error in hash:', hash.error, hash.error_description)
+    return null
+  }
+  
   window.location.hash = ''
   return hash.access_token
 }
@@ -112,6 +118,7 @@ export const getAccessToken = () => {
   
   console.log('Redirecting NOW to Spotify login page...')
   console.log('Target URL:', authUrl)
+  console.log('This should take you to accounts.spotify.com')
   
   // Store redirect attempt in sessionStorage for debugging
   sessionStorage.setItem('spotify_redirect_attempt', JSON.stringify({
@@ -124,15 +131,12 @@ export const getAccessToken = () => {
   // CRITICAL: Redirect to Spotify's login page
   // This should take you to accounts.spotify.com, NOT back to GitHub Pages
   // The redirect_uri parameter is where Spotify sends you BACK after login
-  try {
-    // Use window.location.href for immediate redirect
-    window.location.href = authUrl
-  } catch (error) {
-    console.error('Redirect error:', error)
-    // Fallback: try window.location.replace
-    window.location.replace(authUrl)
-  }
   
+  // Stop any further execution and redirect immediately
+  // Don't return, just redirect
+  window.location.href = authUrl
+  
+  // This should never execute, but just in case:
   return null
 }
 
