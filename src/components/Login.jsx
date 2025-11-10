@@ -3,13 +3,21 @@ import { getAccessToken, getStoredToken, isSpotifyConfigured } from '../services
 
 const Login = () => {
   const handleLogin = () => {
+    console.log('Login button clicked')
     // Only redirect if we don't already have a token
     if (!getStoredToken()) {
-      getAccessToken()
+      console.log('No stored token, calling getAccessToken...')
+      const result = getAccessToken()
+      if (result === null) {
+        console.log('getAccessToken returned null, redirect should happen')
+      }
+    } else {
+      console.log('Token already exists')
     }
   }
 
   const isConfigured = isSpotifyConfigured()
+  console.log('Spotify configured:', isConfigured)
 
   return (
     <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-spotify-green via-spotify-dark to-black">

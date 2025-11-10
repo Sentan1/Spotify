@@ -47,6 +47,7 @@ export const getAccessToken = () => {
   // Check if CLIENT_ID is configured
   if (!CLIENT_ID || CLIENT_ID.trim() === '') {
     console.error('Spotify Client ID is not configured. Please set VITE_SPOTIFY_CLIENT_ID environment variable.')
+    console.error('Current CLIENT_ID value:', CLIENT_ID)
     alert('Spotify Client ID is not configured. Please check your environment variables or GitHub Secrets.')
     return null
   }
@@ -60,7 +61,13 @@ export const getAccessToken = () => {
   
   // Redirect to Spotify login
   const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
-  window.location.href = authUrl
+  
+  console.log('Redirecting to Spotify:', authUrl)
+  console.log('CLIENT_ID:', CLIENT_ID)
+  console.log('REDIRECT_URI:', REDIRECT_URI)
+  
+  // Use window.location.replace to ensure redirect happens
+  window.location.replace(authUrl)
   return null
 }
 
