@@ -7,33 +7,54 @@ const Login = () => {
     e.stopPropagation()
     
     console.log('🔵 Login button clicked')
-    console.log('Spotify configured:', isSpotifyConfigured())
+    const configured = isSpotifyConfigured()
+    console.log('Spotify configured:', configured)
+    
+    // Check if already have token
+    const storedToken = getStoredToken()
+    if (storedToken) {
+      console.log('✅ Already have token, reloading...')
+      window.location.reload()
+      return
+    }
+    
+    // If not configured, show error
+    if (!configured) {
+      alert('Spotify Client ID is not configured. Please check GitHub Secrets and redeploy.')
+      return
+    }
     
     // Always try to get access token (it will redirect if needed)
     try {
       const result = getAccessToken()
       console.log('getAccessToken returned:', result ? 'TOKEN' : 'NULL')
       
-      // If result is null, redirect should happen (or CLIENT_ID is missing)
-      // If result is a token, we already have one
       if (result) {
         console.log('✅ Already have token, reloading page...')
-        // Reload to show the player
         window.location.reload()
       } else {
-        console.log('⏳ Redirect should be happening...')
-        // Give it a moment, then check if we're still here
-        setTimeout(() => {
-          console.warn('⚠️ Still on page after redirect attempt. This might mean CLIENT_ID is empty.')
-        }, 500)
+        console.log('⏳ Redirect initiated...')
       }
     } catch (error) {
       console.error('❌ Error during login:', error)
-      alert('Error during login. Please check the console for details.')
+      alert('Error during login: ' + error.message)
     }
   }
 
   const isConfigured = isSpotifyConfigured()
+  
+  // Get the auth URL for direct link fallback
+  const getAuthUrl = () => {
+    const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
+    const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 
+      (window.location.origin + window.location.pathname.replace(/\/$/, ''))
+    const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
+    
+    if (!CLIENT_ID) return null
+    return `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
+  }
+  
+  const authUrl = getAuthUrl()
 
   return (
     <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-spotify-green via-spotify-dark to-black">
@@ -54,12 +75,25 @@ const Login = () => {
             ⚠️ Spotify Client ID Not Configured
           </div>
         ) : (
-          <button
-            onClick={handleLogin}
-            className="w-full py-4 px-8 bg-spotify-green hover:bg-[#1ed760] text-black font-bold rounded-full transition-all transform hover:scale-105 shadow-lg shadow-spotify-green/50 text-lg"
-          >
-            Login with Spotify
-          </button>
+          <>
+            <button
+              onClick={handleLogin}
+              className="w-full py-4 px-8 bg-spotify-green hover:bg-[#1ed760] text-black font-bold rounded-full transition-all transform hover:scale-105 shadow-lg shadow-spotify-green/50 text-lg"
+            >
+              Login with Spotify
+            </button>
+            {authUrl && (
+              <a
+                href={authUrl}
+                className="block mt-2 text-center text-sm text-gray-400 hover:text-white underline"
+                onClick={(e) => {
+                  console.log('Direct link clicked, redirecting to:', authUrl)
+                }}
+              >
+                Or click here if button doesn't work
+              </a>
+            )}
+          </>
         )}
         {!isConfigured ? (
           <div className="text-red-400 text-sm mt-4 space-y-2">

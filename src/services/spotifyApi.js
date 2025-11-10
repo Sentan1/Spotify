@@ -79,14 +79,15 @@ export const getAccessToken = () => {
   console.log('Full Auth URL:', authUrl)
   console.log('Redirecting NOW...')
   
-  // Force redirect - use setTimeout to ensure it happens
-  setTimeout(() => {
-    console.log('Executing redirect...')
-    window.location.href = authUrl
-  }, 100)
-  
-  // Also try immediate redirect
+  // Force immediate redirect - don't wait
+  // Use window.location.href as it's most reliable
   window.location.href = authUrl
+  
+  // If that doesn't work, try these fallbacks
+  setTimeout(() => {
+    console.warn('First redirect attempt may have failed, trying window.location.replace...')
+    window.location.replace(authUrl)
+  }, 50)
   
   return null
 }
