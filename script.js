@@ -21,9 +21,16 @@ const pauseButton = document.getElementById('pause');
 const nextButton = document.getElementById('next');
 const favoriteButton = document.getElementById('favorite');
 
-// Show modal on load
+// Show modal on load and detect mobile
 window.onload = () => {
   document.getElementById("notificationModal").style.display = "flex";
+  
+  // Show mobile warning if on mobile device
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const mobileWarning = document.getElementById('mobileWarning');
+  if (isMobile && mobileWarning) {
+    mobileWarning.style.display = 'block';
+  }
 };
 
 function closeModal() {
@@ -155,43 +162,75 @@ async function performSearch(showSuggestions = false) {
     
     // If direct failed, try multiple proxies in parallel (race condition)
     if (!data || data.error) {
-      // List of reliable CORS proxies to try
+      // List of reliable CORS proxies to try (mobile-friendly)
       const proxyUrls = [
         `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`,
         `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+        `https://cors-anywhere.herokuapp.com/${apiUrl}`,
         `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,
         `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`,
-        `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(apiUrl)}`
+        `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(apiUrl)}`,
+        `https://cors.bridged.cc/${apiUrl}`,
+        `https://proxy.cors.sh/${apiUrl}`
       ];
       
-      // Create promises for all proxies
-      const proxyPromises = proxyUrls.map(proxyUrl => 
+      // Create promises for all proxies with better error handling
+      const proxyPromises = proxyUrls.map((proxyUrl, index) => 
         fetch(proxyUrl, {
           signal: currentSearchController.signal,
-          headers: { 'Accept': 'application/json' },
-          mode: 'cors'
+          headers: { 
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          mode: 'cors',
+          credentials: 'omit'
         })
         .then(response => {
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          return response.json();
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.text().then(text => {
+            try {
+              return JSON.parse(text);
+            } catch {
+              return text;
+            }
+          });
         })
         .then(proxyData => {
           // Handle different proxy response formats
+          if (typeof proxyData === 'string') {
+            try {
+              proxyData = JSON.parse(proxyData);
+            } catch {
+              return null;
+            }
+          }
+          
           if (proxyData.contents) {
             try {
-              return JSON.parse(proxyData.contents);
+              const parsed = JSON.parse(proxyData.contents);
+              return parsed;
             } catch {
-              return proxyData.contents;
+              // If contents is already an object
+              if (typeof proxyData.contents === 'object') {
+                return proxyData.contents;
+              }
+              return null;
             }
           } else if (proxyData.data) {
             return proxyData;
           } else if (Array.isArray(proxyData)) {
             return { data: proxyData };
-          } else {
+          } else if (proxyData && typeof proxyData === 'object') {
             return proxyData;
           }
+          return null;
         })
-        .catch(() => null) // Return null on error, don't throw
+        .catch(error => {
+          console.log(`Proxy ${index + 1} failed:`, error.message);
+          return null;
+        })
       );
       
       // Race all proxies - use first successful response
@@ -212,27 +251,60 @@ async function performSearch(showSuggestions = false) {
         
         // If no proxy worked, try one more time with a different approach
         if (!data || !data.data) {
-          // Last resort: try with JSONP-like approach or different endpoint
-          const lastResortUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}&callback=?`;
-          try {
-            const lastResort = await fetch(lastResortUrl.replace('callback=?', ''), {
-              signal: currentSearchController.signal,
-              headers: { 'Accept': 'application/json' }
-            });
-            if (lastResort.ok) {
-              const lastResortData = await lastResort.json();
-              if (lastResortData.contents) {
-                data = JSON.parse(lastResortData.contents);
-                clearTimeout(timeoutId);
+          // Last resort: try with different endpoint format
+          const lastResortUrls = [
+            `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
+            `https://cors-anywhere.herokuapp.com/${apiUrl}`
+          ];
+          
+          for (const lastResortUrl of lastResortUrls) {
+            try {
+              const lastResort = await fetch(lastResortUrl, {
+                signal: currentSearchController.signal,
+                headers: { 
+                  'Accept': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+                },
+                mode: 'cors'
+              });
+              if (lastResort.ok) {
+                const lastResortData = await lastResort.json();
+                if (lastResortData.contents) {
+                  try {
+                    data = JSON.parse(lastResortData.contents);
+                    if (data && data.data) {
+                      clearTimeout(timeoutId);
+                      break;
+                    }
+                  } catch {
+                    // Try as object
+                    if (typeof lastResortData.contents === 'object') {
+                      data = lastResortData.contents;
+                      if (data && data.data) {
+                        clearTimeout(timeoutId);
+                        break;
+                      }
+                    }
+                  }
+                } else if (lastResortData.data) {
+                  data = lastResortData;
+                  clearTimeout(timeoutId);
+                  break;
+                }
               }
+            } catch {
+              // Continue to next
             }
-          } catch {
-            // Ignore last resort errors
           }
         }
         
         if (!data || !data.data) {
           clearTimeout(timeoutId);
+          // Check if mobile device
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          if (isMobile) {
+            throw new Error('Mobile network restriction detected. Please try using Chrome browser or a different network connection.');
+          }
           throw new Error('Search service unavailable. Please check your internet connection or try again later.');
         }
       } catch (proxyError) {
@@ -275,19 +347,37 @@ async function performSearch(showSuggestions = false) {
     if (!showSuggestions) {
       let errorMessage = error.message || 'Search failed';
       
+      // Detect mobile device
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isChrome = /Chrome/i.test(navigator.userAgent) && !/Edge/i.test(navigator.userAgent);
+      
       // Provide helpful error messages
       if (errorMessage.includes('network') || errorMessage.includes('connection')) {
         errorMessage = 'Network error. Please check your internet connection and try again.';
-      } else if (errorMessage.includes('CORS') || errorMessage.includes('proxy')) {
-        errorMessage = 'Connection blocked. This may be due to network restrictions. Please try again or use a different network.';
+      } else if (errorMessage.includes('CORS') || errorMessage.includes('proxy') || errorMessage.includes('Mobile network')) {
+        if (isMobile) {
+          errorMessage = 'Connection blocked on mobile. This is a known limitation with CORS proxies on mobile networks.';
+        } else {
+          errorMessage = 'Connection blocked. This may be due to network restrictions.';
+        }
+      }
+      
+      let tipMessage = '';
+      if (isMobile) {
+        tipMessage = isChrome 
+          ? '💡 Tip: Try using a different browser (Firefox, Safari) or connect to a different network (WiFi instead of mobile data).'
+          : '💡 Tip: Try using Chrome browser or connect to WiFi instead of mobile data. Some mobile networks block proxy services.';
+      } else {
+        tipMessage = '💡 Tip: Try refreshing the page, clearing browser cache, or using a different network connection.';
       }
       
       searchResults.innerHTML = `
         <div class="error">
-          <p>${errorMessage}</p>
+          <p><strong>${errorMessage}</strong></p>
           <p style="margin-top: 10px; font-size: 0.9rem; opacity: 0.8;">
-            💡 Tip: Try refreshing the page or using a different network connection.
+            ${tipMessage}
           </p>
+          ${isMobile ? '<p style="margin-top: 8px; font-size: 0.85rem; opacity: 0.7;">Note: Mobile browsers have stricter security policies that may block CORS proxies.</p>' : ''}
         </div>
       `;
     }
