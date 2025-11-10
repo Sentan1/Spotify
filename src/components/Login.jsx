@@ -1,4 +1,4 @@
-import { Spotify } from 'lucide-react'
+import { Music } from 'lucide-react'
 import { getAccessToken, getStoredToken } from '../services/spotifyApi'
 
 const Login = () => {
@@ -14,7 +14,7 @@ const Login = () => {
       <div className="text-center p-8 bg-black/40 backdrop-blur-xl rounded-3xl border border-white/10 shadow-2xl max-w-md">
         <div className="mb-6 flex justify-center">
           <div className="p-4 rounded-full bg-spotify-green">
-            <Spotify size={48} className="text-black" />
+            <Music size={48} className="text-black" />
           </div>
         </div>
         <h1 className="text-4xl font-bold text-white mb-4">
