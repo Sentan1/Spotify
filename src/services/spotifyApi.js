@@ -6,7 +6,9 @@ const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
 // Make sure it ends with / for GitHub Pages
 const getRedirectUri = () => {
   if (import.meta.env.VITE_SPOTIFY_REDIRECT_URI) {
-    return import.meta.env.VITE_SPOTIFY_REDIRECT_URI
+    const uri = import.meta.env.VITE_SPOTIFY_REDIRECT_URI
+    // Ensure it ends with / for GitHub Pages
+    return uri.endsWith('/') ? uri : uri + '/'
   }
   // Auto-detect for GitHub Pages
   const origin = window.location.origin
@@ -161,26 +163,34 @@ const initiatePKCEFlow = async () => {
   localStorage.setItem('spotify_auth_state', state)
   
   // Store the redirect URI used so we can match it exactly later
-  localStorage.setItem('spotify_redirect_uri', REDIRECT_URI)
-  console.log('✅ Redirect URI stored:', REDIRECT_URI)
+  // Ensure it ends with / for GitHub Pages
+  const redirectUriForAuth = REDIRECT_URI.endsWith('/') ? REDIRECT_URI : REDIRECT_URI + '/'
+  localStorage.setItem('spotify_redirect_uri', redirectUriForAuth)
+  console.log('✅ Redirect URI stored:', redirectUriForAuth)
   
   // Build authorization URL
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    redirect_uri: REDIRECT_URI,
-    state: state,
-    code_challenge_method: 'S256',
-    code_challenge: codeChallenge,
-    show_dialog: 'true'
-  })
+  
+  const params = new URLSearchParams()
+  params.append('response_type', 'code')
+  params.append('client_id', CLIENT_ID)
+  params.append('scope', SCOPES)
+  params.append('redirect_uri', redirectUriForAuth)
+  params.append('state', state)
+  params.append('code_challenge_method', 'S256')
+  params.append('code_challenge', codeChallenge)
+  params.append('show_dialog', 'true')
   
   const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`
   
   console.log('🔄 Redirecting to Spotify login page...')
-  console.log('Auth URL (first 200 chars):', authUrl.substring(0, 200))
-  console.log('Redirect URI in auth URL:', REDIRECT_URI)
+  console.log('Redirect URI for auth:', redirectUriForAuth)
+  console.log('Code challenge length:', codeChallenge.length)
+  console.log('State:', state)
+  console.log('Auth URL length:', authUrl.length)
+  console.log('Auth URL (first 300 chars):', authUrl.substring(0, 300))
+  
+  // Store the exact redirect URI used
+  localStorage.setItem('spotify_redirect_uri', redirectUriForAuth)
   
   // Redirect to Spotify
   window.location.href = authUrl
