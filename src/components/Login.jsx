@@ -6,21 +6,29 @@ const Login = () => {
     e.preventDefault()
     e.stopPropagation()
     
-    console.log('Login button clicked')
+    console.log('🔵 Login button clicked')
     console.log('Spotify configured:', isSpotifyConfigured())
     
     // Always try to get access token (it will redirect if needed)
     try {
       const result = getAccessToken()
-      // If we get here and result is null, redirect should have happened
+      console.log('getAccessToken returned:', result ? 'TOKEN' : 'NULL')
+      
+      // If result is null, redirect should happen (or CLIENT_ID is missing)
       // If result is a token, we already have one
       if (result) {
-        console.log('Already have token')
+        console.log('✅ Already have token, reloading page...')
         // Reload to show the player
         window.location.reload()
+      } else {
+        console.log('⏳ Redirect should be happening...')
+        // Give it a moment, then check if we're still here
+        setTimeout(() => {
+          console.warn('⚠️ Still on page after redirect attempt. This might mean CLIENT_ID is empty.')
+        }, 500)
       }
     } catch (error) {
-      console.error('Error during login:', error)
+      console.error('❌ Error during login:', error)
       alert('Error during login. Please check the console for details.')
     }
   }

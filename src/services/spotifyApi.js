@@ -44,17 +44,28 @@ export const isTokenExpired = () => {
 
 // Get access token
 export const getAccessToken = () => {
+  console.log('=== getAccessToken called ===')
+  console.log('CLIENT_ID exists:', !!CLIENT_ID)
+  console.log('CLIENT_ID length:', CLIENT_ID ? CLIENT_ID.length : 0)
+  console.log('CLIENT_ID value (first 10 chars):', CLIENT_ID ? CLIENT_ID.substring(0, 10) : 'EMPTY')
+  
   // Check if CLIENT_ID is configured
   if (!CLIENT_ID || CLIENT_ID.trim() === '') {
-    console.error('Spotify Client ID is not configured. Please set VITE_SPOTIFY_CLIENT_ID environment variable.')
+    console.error('❌ Spotify Client ID is not configured!')
     console.error('Current CLIENT_ID value:', CLIENT_ID)
-    alert('Spotify Client ID is not configured. Please check your environment variables or GitHub Secrets.')
+    console.error('Environment variable VITE_SPOTIFY_CLIENT_ID is not set or empty')
+    alert('Spotify Client ID is not configured.\n\nPlease:\n1. Add VITE_SPOTIFY_CLIENT_ID to GitHub Secrets\n2. Redeploy the app\n\nCheck console for details.')
     return null
   }
   
+  console.log('✅ CLIENT_ID is configured')
+  
   const token = getTokenFromUrl() || getStoredToken()
+  console.log('Token from URL:', !!getTokenFromUrl())
+  console.log('Stored token:', !!getStoredToken())
   
   if (token && !isTokenExpired()) {
+    console.log('✅ Using existing token')
     storeToken(token)
     return token
   }
@@ -62,26 +73,20 @@ export const getAccessToken = () => {
   // Redirect to Spotify login
   const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
   
-  console.log('Redirecting to Spotify...')
-  console.log('CLIENT_ID:', CLIENT_ID ? `${CLIENT_ID.substring(0, 8)}...` : 'EMPTY')
+  console.log('🔄 Preparing to redirect to Spotify...')
+  console.log('CLIENT_ID:', `${CLIENT_ID.substring(0, 8)}...`)
   console.log('REDIRECT_URI:', REDIRECT_URI)
   console.log('Full Auth URL:', authUrl)
+  console.log('Redirecting NOW...')
   
-  // Try multiple methods to ensure redirect happens
-  try {
-    // Method 1: window.location.replace (preferred - doesn't add to history)
-    window.location.replace(authUrl)
-  } catch (e) {
-    console.warn('window.location.replace failed, trying window.location.href:', e)
-    try {
-      // Method 2: window.location.href (fallback)
-      window.location.href = authUrl
-    } catch (e2) {
-      console.error('Both redirect methods failed:', e2)
-      // Method 3: window.open as last resort (might be blocked by popup blocker)
-      window.open(authUrl, '_self')
-    }
-  }
+  // Force redirect - use setTimeout to ensure it happens
+  setTimeout(() => {
+    console.log('Executing redirect...')
+    window.location.href = authUrl
+  }, 100)
+  
+  // Also try immediate redirect
+  window.location.href = authUrl
   
   return null
 }
