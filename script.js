@@ -34,11 +34,24 @@ document.getElementById("notificationModal").addEventListener("click", (e) => {
   if (e.target === e.currentTarget) closeModal();
 });
 
+// Search cache and request cancellation (must be defined first)
+const searchCache = new Map();
+let currentSearchController = null;
+
 // Search functionality
-searchBtn.addEventListener('click', performSearch);
+searchBtn.addEventListener('click', () => {
+  if (currentSearchController) {
+    currentSearchController.abort();
+  }
+  performSearch(false);
+});
+
 searchInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    performSearch();
+    if (currentSearchController) {
+      currentSearchController.abort();
+    }
+    performSearch(false);
   }
 });
 
@@ -46,6 +59,13 @@ searchInput.addEventListener('keypress', (e) => {
 let lastQuery = '';
 searchInput.addEventListener('input', (e) => {
   clearTimeout(searchTimeout);
+  
+  // Cancel previous search if still running
+  if (currentSearchController) {
+    currentSearchController.abort();
+    currentSearchController = null;
+  }
+  
   const query = e.target.value.trim();
   
   // Skip if same query
@@ -59,10 +79,10 @@ searchInput.addEventListener('input', (e) => {
   }
   
   if (query.length > 2) {
-    // Show suggestions as user types - longer debounce for performance
+    // Show suggestions as user types - faster debounce
     searchTimeout = setTimeout(() => {
       performSearch(true); // Show suggestions
-    }, 400);
+    }, 250);
   } else {
     searchResults.innerHTML = '';
     if (suggestionsContainer) {
@@ -86,70 +106,83 @@ async function performSearch(showSuggestions = false) {
     return;
   }
 
+  // Check cache first
+  const cacheKey = `${query}_${showSuggestions}`;
+  if (searchCache.has(cacheKey)) {
+    const cachedData = searchCache.get(cacheKey);
+    if (showSuggestions) {
+      displaySuggestions(cachedData);
+    } else {
+      displaySearchResults(cachedData);
+    }
+    return;
+  }
+
+  // Cancel previous search
+  if (currentSearchController) {
+    currentSearchController.abort();
+  }
+  currentSearchController = new AbortController();
+
   if (!showSuggestions) {
     searchResults.innerHTML = '<div class="loading">Searching...</div>';
   }
 
   try {
-    // Using Deezer API - try direct first, then proxy
     const apiUrl = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=${showSuggestions ? 5 : 10}`;
+    
+    // Create fetch with timeout and abort signal
+    const timeoutId = setTimeout(() => currentSearchController?.abort(), 5000);
     
     let data = null;
     
-    // Try direct API call first (some browsers allow it)
+    // Try direct API call first (fastest)
     try {
-      const directResponse = await fetch(apiUrl);
+      const directResponse = await fetch(apiUrl, {
+        signal: currentSearchController.signal,
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      });
+      
       if (directResponse.ok) {
         data = await directResponse.json();
+        clearTimeout(timeoutId);
       }
     } catch (directError) {
-      console.log('Direct API call failed, using proxy...');
+      if (directError.name === 'AbortError') throw directError;
+      // Direct failed, will try proxy
     }
     
-    // If direct failed, use proxy
+    // If direct failed, use fastest proxy
     if (!data || data.error) {
-      // Use a more reliable CORS proxy - try multiple options
-      const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`,
-        `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`,
-        `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`
-      ];
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
       
-      let proxySuccess = false;
-      for (const proxyUrl of proxies) {
-        try {
-          const response = await fetch(proxyUrl, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-            }
-          });
-          
-          if (!response.ok) continue;
-          
-          const proxyData = await response.json();
-          
-          // Handle different proxy response formats
-          if (proxyData.contents) {
-            data = JSON.parse(proxyData.contents);
-          } else if (proxyData.data) {
-            data = proxyData;
-          } else {
-            data = proxyData;
-          }
-          
-          if (data && data.data) {
-            proxySuccess = true;
-            break;
-          }
-        } catch (proxyError) {
-          console.log('Proxy failed:', proxyUrl);
-          continue;
+      try {
+        const response = await fetch(proxyUrl, {
+          signal: currentSearchController.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
-      }
-      
-      if (!proxySuccess) {
-        throw new Error('Unable to connect to search service. Please check your internet connection.');
+        
+        const proxyData = await response.json();
+        
+        // Handle proxy response format
+        if (proxyData.contents) {
+          data = JSON.parse(proxyData.contents);
+        } else if (proxyData.data) {
+          data = proxyData;
+        } else {
+          data = proxyData;
+        }
+        
+        clearTimeout(timeoutId);
+      } catch (proxyError) {
+        if (proxyError.name === 'AbortError') throw proxyError;
+        clearTimeout(timeoutId);
+        throw new Error('Unable to connect to search service');
       }
     }
     
@@ -158,10 +191,15 @@ async function performSearch(showSuggestions = false) {
       throw new Error(data.error.message || 'API error');
     }
 
-    // Debug logging
-    console.log('Search response:', data);
-
     if (data && data.data && data.data.length > 0) {
+      // Cache the results
+      searchCache.set(cacheKey, data.data);
+      // Limit cache size
+      if (searchCache.size > 50) {
+        const firstKey = searchCache.keys().next().value;
+        searchCache.delete(firstKey);
+      }
+      
       if (showSuggestions) {
         displaySuggestions(data.data);
       } else {
@@ -173,10 +211,16 @@ async function performSearch(showSuggestions = false) {
       }
     }
   } catch (error) {
+    if (error.name === 'AbortError') {
+      // Request was cancelled, ignore
+      return;
+    }
     console.error('Search error:', error);
     if (!showSuggestions) {
       searchResults.innerHTML = `<div class="error">Error: ${error.message || 'Search failed'}. Please try again.</div>`;
     }
+  } finally {
+    currentSearchController = null;
   }
 }
 
