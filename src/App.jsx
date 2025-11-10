@@ -24,40 +24,58 @@ function App() {
 
   // Initialize token on mount
   useEffect(() => {
-    // Check if we're returning from Spotify auth (PKCE flow)
-    const code = getCodeFromUrl()
-    if (code) {
-      console.log('✅ Authorization code received from Spotify!')
-      // getAccessToken will handle the code exchange
-      handleTokenInitialization()
-      return
+    const initializeAuth = async () => {
+      // Check if we're returning from Spotify auth (PKCE flow)
+      const code = getCodeFromUrl()
+      if (code) {
+        console.log('✅ Authorization code received from Spotify!')
+        setIsLoading(true)
+        
+        try {
+          // Exchange code for token
+          const { getAccessToken } = await import('./services/spotifyApi')
+          const token = await getAccessToken()
+          
+          if (token) {
+            console.log('✅ Token obtained successfully!')
+            setToken(token)
+            await loadInitialTracks(token)
+          } else {
+            console.error('❌ Failed to get token from code')
+            alert('Failed to authenticate. Please try logging in again.')
+          }
+        } catch (error) {
+          console.error('❌ Error during token exchange:', error)
+          alert(`Authentication error: ${error.message}\n\nPlease try logging in again.`)
+        } finally {
+          setIsLoading(false)
+        }
+        return
+      }
+      
+      // Check for error in URL (Spotify redirects back with error)
+      const urlParams = new URLSearchParams(window.location.search)
+      const error = urlParams.get('error')
+      const errorDescription = urlParams.get('error_description')
+      
+      if (error) {
+        console.error('❌ Spotify auth error:', error, errorDescription)
+        alert(`Spotify authentication error: ${error}\n${errorDescription || ''}\n\nPlease check your Spotify app settings.`)
+        // Clear the error from URL
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+      
+      // Check for stored token
+      const storedToken = getStoredToken()
+      if (storedToken) {
+        setToken(storedToken)
+        loadInitialTracks(storedToken)
+      }
+      // If no token and no code, show login screen
     }
     
-    // Check for error in URL (Spotify redirects back with error)
-    const urlParams = new URLSearchParams(window.location.search)
-    const error = urlParams.get('error')
-    const errorDescription = urlParams.get('error_description')
-    
-    if (error) {
-      console.error('❌ Spotify auth error:', error, errorDescription)
-      alert(`Spotify authentication error: ${error}\n${errorDescription || ''}\n\nPlease check your Spotify app settings.`)
-      // Clear the error from URL
-      window.history.replaceState({}, document.title, window.location.pathname)
-    }
-    
-    // Check for stored token
-    handleTokenInitialization()
+    initializeAuth()
   }, [])
-  
-  // Handle token initialization
-  const handleTokenInitialization = async () => {
-    const storedToken = getStoredToken()
-    if (storedToken) {
-      setToken(storedToken)
-      loadInitialTracks(storedToken)
-    }
-    // If no token and no code, show login screen
-  }
 
   // Load initial tracks (user's top tracks)
   const loadInitialTracks = async (accessToken) => {

@@ -101,21 +101,30 @@ export const getAccessToken = async () => {
   const code = getCodeFromUrl()
   if (code) {
     console.log('✅ Authorization code received, exchanging for token...')
+    console.log('Code length:', code.length)
+    
     const codeVerifier = localStorage.getItem('code_verifier')
     if (!codeVerifier) {
       console.error('❌ Code verifier not found in localStorage')
+      console.error('Available localStorage keys:', Object.keys(localStorage))
+      alert('Authentication error: Code verifier not found. Please try logging in again.')
       return null
     }
+    
+    console.log('Code verifier found, length:', codeVerifier.length)
     
     try {
       const token = await exchangeCodeForToken(code, codeVerifier)
       if (token) {
+        console.log('✅ Token stored successfully')
         storeToken(token)
         localStorage.removeItem('code_verifier') // Clean up
+        localStorage.removeItem('spotify_auth_state') // Clean up
         return token
       }
     } catch (error) {
       console.error('❌ Error exchanging code for token:', error)
+      alert(`Authentication error: ${error.message}\n\nPlease check the console for details.`)
       return null
     }
   }
@@ -165,33 +174,52 @@ const initiatePKCEFlow = async () => {
 const exchangeCodeForToken = async (code, codeVerifier) => {
   const url = 'https://accounts.spotify.com/api/token'
   
+  console.log('🔄 Exchanging code for token...')
+  console.log('Code:', code ? code.substring(0, 20) + '...' : 'MISSING')
+  console.log('Code verifier exists:', !!codeVerifier)
+  console.log('Redirect URI:', REDIRECT_URI)
+  
+  const bodyParams = new URLSearchParams({
+    client_id: CLIENT_ID,
+    grant_type: 'authorization_code',
+    code: code,
+    redirect_uri: REDIRECT_URI,
+    code_verifier: codeVerifier,
+  })
+  
+  console.log('Request body params:', bodyParams.toString().replace(/code_verifier=[^&]+/, 'code_verifier=***'))
+  
   const payload = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      grant_type: 'authorization_code',
-      code: code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: codeVerifier,
-    }),
+    body: bodyParams,
   }
   
   try {
     const response = await fetch(url, payload)
     const data = await response.json()
     
+    console.log('Token exchange response status:', response.status)
+    console.log('Token exchange response:', data)
+    
     if (!response.ok) {
       console.error('❌ Token exchange failed:', data)
-      throw new Error(data.error_description || data.error || 'Token exchange failed')
+      const errorMsg = data.error_description || data.error || 'Token exchange failed'
+      console.error('Error details:', {
+        error: data.error,
+        error_description: data.error_description,
+        status: response.status
+      })
+      throw new Error(errorMsg)
     }
     
     console.log('✅ Token received successfully')
     return data.access_token
   } catch (error) {
     console.error('❌ Error in token exchange:', error)
+    console.error('Error stack:', error.stack)
     throw error
   }
 }
