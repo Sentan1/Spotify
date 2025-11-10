@@ -42,10 +42,15 @@ searchInput.addEventListener('keypress', (e) => {
   }
 });
 
-// Real-time search with suggestions (debounced)
+// Real-time search with suggestions (debounced) - optimized
+let lastQuery = '';
 searchInput.addEventListener('input', (e) => {
   clearTimeout(searchTimeout);
   const query = e.target.value.trim();
+  
+  // Skip if same query
+  if (query === lastQuery) return;
+  lastQuery = query;
   
   // Hide suggestions if input is cleared
   const suggestionsContainer = document.getElementById('suggestionsContainer');
@@ -54,10 +59,10 @@ searchInput.addEventListener('input', (e) => {
   }
   
   if (query.length > 2) {
-    // Show suggestions as user types
+    // Show suggestions as user types - longer debounce for performance
     searchTimeout = setTimeout(() => {
       performSearch(true); // Show suggestions
-    }, 300);
+    }, 400);
   } else {
     searchResults.innerHTML = '';
     if (suggestionsContainer) {
@@ -385,7 +390,10 @@ function pausePlayback() {
   audioPlayer.pause();
   isPaused = true;
   pauseButton.textContent = '►';
-  clearInterval(progressInterval);
+  if (progressInterval) {
+    cancelAnimationFrame(progressInterval);
+    progressInterval = null;
+  }
 }
 
 function resumePlayback() {
@@ -399,7 +407,10 @@ function stopPlayback() {
   audioPlayer.pause();
   audioPlayer.currentTime = 0;
   isPaused = false;
-  clearInterval(progressInterval);
+  if (progressInterval) {
+    cancelAnimationFrame(progressInterval);
+    progressInterval = null;
+  }
   const progressEl = document.querySelector('.song-info.active .progress');
   if (progressEl) {
     progressEl.style.width = '0%';
@@ -407,7 +418,11 @@ function stopPlayback() {
 }
 
 function startProgressTracking() {
-  clearInterval(progressInterval);
+  // Cancel any existing animation frame
+  if (progressInterval) {
+    cancelAnimationFrame(progressInterval);
+    progressInterval = null;
+  }
   
   const activeSongInfo = document.querySelector('.song-info.active');
   if (!activeSongInfo) return;
@@ -417,22 +432,33 @@ function startProgressTracking() {
   const remainingSpan = activeSongInfo.querySelector('.remaining');
   const song = playlist[currentIndex];
   
-  progressInterval = setInterval(() => {
-    if (audioPlayer.readyState >= 2) {
-      const current = audioPlayer.currentTime;
-      const duration = audioPlayer.duration || song.duration;
-      const progress = (current / duration) * 100;
-      
-      progressEl.style.width = progress + '%';
-      elapsedSpan.textContent = formatTime(current);
-      remainingSpan.textContent = formatTime(Math.max(0, duration - current));
-      
-      // Auto-advance when preview ends (30 seconds)
-      if (current >= duration - 0.5) {
-        nextSong();
+  // Use requestAnimationFrame for smoother updates
+  let lastUpdate = 0;
+  const updateProgress = (timestamp) => {
+    if (timestamp - lastUpdate >= 100) { // Update every 100ms
+      if (audioPlayer.readyState >= 2 && !isPaused) {
+        const current = audioPlayer.currentTime;
+        const duration = audioPlayer.duration || song.duration;
+        const progress = (current / duration) * 100;
+        
+        if (progressEl) progressEl.style.width = progress + '%';
+        if (elapsedSpan) elapsedSpan.textContent = formatTime(current);
+        if (remainingSpan) remainingSpan.textContent = formatTime(Math.max(0, duration - current));
+        
+        // Auto-advance when preview ends (30 seconds)
+        if (current >= duration - 0.5) {
+          nextSong();
+          return;
+        }
       }
+      lastUpdate = timestamp;
     }
-  }, 100);
+    if (!isPaused) {
+      progressInterval = requestAnimationFrame(updateProgress);
+    }
+  };
+  
+  progressInterval = requestAnimationFrame(updateProgress);
 }
 
 // Player controls
@@ -519,21 +545,56 @@ function showNotification(message) {
   }, 2000);
 }
 
-// Color theming functions
+// Color cache for performance
+const colorCache = new Map();
+
+// Color theming functions - optimized
 function preloadCardColors() {
   const cards = document.querySelectorAll('.card');
   let cardsLoaded = 0;
+  const totalCards = cards.length;
 
-  cards.forEach((card) => {
+  cards.forEach((card, index) => {
     const img = card.querySelector('img');
-    if (!img) return;
+    if (!img) {
+      cardsLoaded++;
+      if (cardsLoaded === totalCards && playlist.length > 0) {
+        updateActiveSong(currentIndex);
+      }
+      return;
+    }
 
+    const imgSrc = img.src;
+    
+    // Check cache first
+    if (colorCache.has(imgSrc)) {
+      const cached = colorCache.get(imgSrc);
+      card.dataset.avgR = cached.avgR;
+      card.dataset.avgG = cached.avgG;
+      card.dataset.avgB = cached.avgB;
+      card.dataset.darkR = cached.darkR;
+      card.dataset.darkG = cached.darkG;
+      card.dataset.darkB = cached.darkB;
+      card.style.backgroundColor = `rgb(${cached.avgR}, ${cached.avgG}, ${cached.avgB})`;
+      card.style.borderColor = `rgba(${cached.darkR}, ${cached.darkG}, ${cached.darkB}, 0.5)`;
+      
+      cardsLoaded++;
+      if (cardsLoaded === totalCards && playlist.length > 0) {
+        updateActiveSong(currentIndex);
+      }
+      return;
+    }
+
+    // Use smaller canvas for faster processing
     getAverageColor(img, (ar, ag, ab) => {
+      const [dr, dg, db] = shiftLightness(ar, ag, ab, -0.3);
+      
+      // Cache the colors
+      colorCache.set(imgSrc, { avgR: ar, avgG: ag, avgB: ab, darkR: dr, darkG: dg, darkB: db });
+      
       card.dataset.avgR = ar;
       card.dataset.avgG = ag;
       card.dataset.avgB = ab;
-
-      const [dr, dg, db] = shiftLightness(ar, ag, ab, -0.3);
       card.dataset.darkR = dr;
       card.dataset.darkG = dg;
       card.dataset.darkB = db;
@@ -542,10 +603,10 @@ function preloadCardColors() {
       card.style.borderColor = `rgba(${dr}, ${dg}, ${db}, 0.5)`;
 
       cardsLoaded++;
-      if (cardsLoaded === cards.length && playlist.length > 0) {
+      if (cardsLoaded === totalCards && playlist.length > 0) {
         updateActiveSong(currentIndex);
       }
-    });
+    }, 50); // Smaller sample size for speed
   });
 }
 
@@ -558,56 +619,78 @@ function applySoftTheme(card) {
   const dg = parseInt(card.dataset.darkG || 70);
   const db = parseInt(card.dataset.darkB || 70);
 
-  const container = document.querySelector('.container');
-  const body = document.querySelector('body');
-  const player = document.querySelector('.player');
+  // Get the current song's cover image
+  const currentSong = playlist[currentIndex];
+  const coverImage = currentSong ? (currentSong.cover || currentSong.album?.cover_big || currentSong.album?.cover_medium) : null;
 
-  const [lr1, lg1, lb1] = shiftLightness(ar, ag, ab, 0.4);
-  const [lr2, lg2, lb2] = shiftLightness(ar, ag, ab, 0.2);
-  body.style.background = `linear-gradient(135deg, rgb(${lr1},${lg1},${lb1}) 0%, rgb(${lr2},${lg2},${lb2}) 100%)`;
+  // Use requestAnimationFrame for smooth transitions
+  requestAnimationFrame(() => {
+    const container = document.querySelector('.container');
+    const body = document.querySelector('body');
+    const player = document.querySelector('.player');
 
-  const [cr, cg, cb] = shiftLightness(ar, ag, ab, 0.6);
-  container.style.backgroundColor = `rgba(${cr},${cg},${cb}, 0.95)`;
-  container.style.borderColor = `rgba(${dr}, ${dg}, ${db}, 0.3)`;
+    // Set background image with overlay
+    if (coverImage) {
+      body.style.backgroundImage = `url(${coverImage})`;
+      body.style.backgroundSize = 'cover';
+      body.style.backgroundPosition = 'center';
+      body.style.backgroundAttachment = 'fixed';
+    }
 
-  const [pr, pg, pb] = shiftLightness(ar, ag, ab, 0.5);
-  player.style.backgroundColor = `rgba(${pr}, ${pg}, ${pb}, 0.7)`;
-  player.style.borderColor = `rgba(${dr}, ${dg}, ${db}, 0.3)`;
+    const [lr1, lg1, lb1] = shiftLightness(ar, ag, ab, 0.3);
+    const [lr2, lg2, lb2] = shiftLightness(ar, ag, ab, 0.1);
+    
+    // Add overlay gradient on top of background image
+    body.style.background = coverImage 
+      ? `linear-gradient(135deg, rgba(${lr1},${lg1},${lb1}, 0.85) 0%, rgba(${lr2},${lg2},${lb2}, 0.9) 100%), url(${coverImage})`
+      : `linear-gradient(135deg, rgb(${lr1},${lg1},${lb1}) 0%, rgb(${lr2},${lg2},${lb2}) 100%)`;
+    body.style.backgroundSize = coverImage ? 'cover, cover' : 'cover';
+    body.style.backgroundPosition = 'center, center';
+    body.style.backgroundAttachment = 'fixed, fixed';
 
-  const leftH1 = document.querySelector('.left-side h1');
-  const leftP = document.querySelector('.left-side p');
-  leftH1.style.background = `linear-gradient(135deg, rgb(${dr}, ${dg}, ${db}) 0%, rgb(${Math.min(dr + 30, 255)}, ${Math.min(dg + 30, 255)}, ${Math.min(db + 30, 255)}) 100%)`;
-  leftH1.style.webkitBackgroundClip = 'text';
-  leftH1.style.webkitTextFillColor = 'transparent';
-  leftH1.style.backgroundClip = 'text';
-  
-  leftP.style.color = `rgba(${dr}, ${dg}, ${db}, 0.8)`;
+    const [cr, cg, cb] = shiftLightness(ar, ag, ab, 0.5);
+    container.style.backgroundColor = `rgba(${cr},${cg},${cb}, 0.15)`;
+    container.style.borderColor = `rgba(${dr}, ${dg}, ${db}, 0.2)`;
 
-  const progress = document.querySelectorAll('.progress');
-  progress.forEach((fill) => {
-    fill.style.background = `linear-gradient(90deg, rgb(${dr}, ${dg}, ${db}) 0%, rgb(${Math.min(dr + 40, 255)}, ${Math.min(dg + 40, 255)}, ${Math.min(db + 40, 255)}) 100%)`;
-  });
+    const [pr, pg, pb] = shiftLightness(ar, ag, ab, 0.3);
+    player.style.backgroundColor = `rgba(${pr}, ${pg}, ${pb}, 0.2)`;
+    player.style.borderColor = `rgba(${dr}, ${dg}, ${db}, 0.2)`;
 
-  const titles = document.querySelectorAll('.song-info .title');
-  const details = document.querySelectorAll('.song-details');
-  const timeIndicators = document.querySelectorAll('.time-indicator');
-  
-  titles.forEach(title => {
-    title.style.color = `rgb(${dr}, ${dg}, ${db})`;
-  });
-  
-  details.forEach(detail => {
-    detail.style.color = `rgba(${dr}, ${dg}, ${db}, 0.7)`;
-  });
-  
-  timeIndicators.forEach(indicator => {
-    indicator.style.color = `rgba(${dr}, ${dg}, ${db}, 0.6)`;
-  });
+    const leftH1 = document.querySelector('.left-side h1');
+    const leftP = document.querySelector('.left-side p');
+    leftH1.style.background = `linear-gradient(135deg, rgb(${dr}, ${dg}, ${db}) 0%, rgb(${Math.min(dr + 30, 255)}, ${Math.min(dg + 30, 255)}, ${Math.min(db + 30, 255)}) 100%)`;
+    leftH1.style.webkitBackgroundClip = 'text';
+    leftH1.style.webkitTextFillColor = 'transparent';
+    leftH1.style.backgroundClip = 'text';
+    
+    leftP.style.color = `rgba(${dr}, ${dg}, ${db}, 0.9)`;
 
-  const controls = document.querySelectorAll('.controls button');
-  controls.forEach((btn) => {
-    btn.style.color = `rgb(${dr}, ${dg}, ${db})`;
-    btn.style.borderColor = `rgba(${dr}, ${dg}, ${db}, 0.3)`;
+    const progress = document.querySelectorAll('.progress');
+    progress.forEach((fill) => {
+      fill.style.background = `linear-gradient(90deg, rgb(${dr}, ${dg}, ${db}) 0%, rgb(${Math.min(dr + 40, 255)}, ${Math.min(dg + 40, 255)}, ${Math.min(db + 40, 255)}) 100%)`;
+    });
+
+    const titles = document.querySelectorAll('.song-info .title');
+    const details = document.querySelectorAll('.song-details');
+    const timeIndicators = document.querySelectorAll('.time-indicator');
+    
+    titles.forEach(title => {
+      title.style.color = `rgb(${dr}, ${dg}, ${db})`;
+    });
+    
+    details.forEach(detail => {
+      detail.style.color = `rgba(${dr}, ${dg}, ${db}, 0.8)`;
+    });
+    
+    timeIndicators.forEach(indicator => {
+      indicator.style.color = `rgba(${dr}, ${dg}, ${db}, 0.7)`;
+    });
+
+    const controls = document.querySelectorAll('.controls button');
+    controls.forEach((btn) => {
+      btn.style.color = `rgb(${dr}, ${dg}, ${db})`;
+      btn.style.borderColor = `rgba(${dr}, ${dg}, ${db}, 0.3)`;
+    });
   });
 }
 
@@ -624,7 +707,14 @@ function shiftLightness(r, g, b, factor) {
   return [Math.round(rr), Math.round(gg), Math.round(bb)];
 }
 
-function getAverageColor(img, cb) {
+function getAverageColor(img, cb, sampleSize = 100) {
+  // Use cached if available
+  if (colorCache.has(img.src)) {
+    const cached = colorCache.get(img.src);
+    cb(cached.avgR, cached.avgG, cached.avgB);
+    return;
+  }
+
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d');
   const tempImg = new Image();
@@ -632,21 +722,27 @@ function getAverageColor(img, cb) {
   tempImg.src = img.src;
 
   tempImg.onload = function() {
-    c.width = tempImg.width;
-    c.height = tempImg.height;
-    ctx.drawImage(tempImg, 0, 0);
+    // Use smaller canvas for faster processing
+    const maxSize = sampleSize;
+    const scale = Math.min(maxSize / tempImg.width, maxSize / tempImg.height, 1);
+    c.width = Math.floor(tempImg.width * scale);
+    c.height = Math.floor(tempImg.height * scale);
+    
+    ctx.drawImage(tempImg, 0, 0, c.width, c.height);
     try {
       const data = ctx.getImageData(0, 0, c.width, c.height).data;
       let rSum = 0, gSum = 0, bSum = 0;
       const totalPixels = data.length / 4;
 
-      for (let i = 0; i < data.length; i += 4) {
+      // Sample every 4th pixel for even faster processing
+      for (let i = 0; i < data.length; i += 16) {
         rSum += data[i];
         gSum += data[i + 1];
         bSum += data[i + 2];
       }
 
-      cb(Math.floor(rSum / totalPixels), Math.floor(gSum / totalPixels), Math.floor(bSum / totalPixels));
+      const sampledPixels = totalPixels / 4;
+      cb(Math.floor(rSum / sampledPixels), Math.floor(gSum / sampledPixels), Math.floor(bSum / sampledPixels));
     } catch {
       cb(200, 200, 200);
     }

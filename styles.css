@@ -18,26 +18,43 @@ body {
   align-items: center;
   min-height: 100vh;
   background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
-  transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  transition: background 1.2s cubic-bezier(0.4, 0, 0.2, 1), background-image 1.2s ease;
   padding: 20px;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: inherit;
+  z-index: -1;
+  transition: opacity 1.2s ease;
 }
 
 /* Container */
 .container {
-  background: rgba(18, 18, 23, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 18, 23, 0.15);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 24px;
   padding: 40px;
   width: 100%;
   max-width: 1200px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: flex-start;
   gap: 50px;
   opacity: 0;
   animation: fadeIn 0.8s ease forwards;
-  transition: background-color 1s ease, border-color 1s ease, box-shadow 1s ease;
+  transition: background-color 1s ease, border-color 1s ease, box-shadow 1s ease, backdrop-filter 1s ease;
 }
 
 @keyframes fadeIn {
@@ -136,11 +153,12 @@ body {
   left: 0;
   right: 0;
   margin-top: 8px;
-  background: rgba(20, 20, 30, 0.95);
-  backdrop-filter: blur(20px);
+  background: rgba(20, 20, 30, 0.4);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
   border-radius: 12px;
   border: 1px solid rgba(0, 212, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   z-index: 1000;
   max-height: 300px;
   overflow-y: auto;
@@ -212,10 +230,12 @@ body {
   overflow-y: auto;
   margin-top: 20px;
   border-radius: 12px;
-  background: rgba(24, 24, 32, 0.8);
-  backdrop-filter: blur(10px);
+  background: rgba(24, 24, 32, 0.3);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   padding: 10px;
-  border: 1px solid rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .search-results::-webkit-scrollbar {
@@ -242,10 +262,11 @@ body {
   gap: 12px;
   padding: 12px;
   margin-bottom: 8px;
-  background: rgba(30, 30, 40, 0.6);
+  background: rgba(30, 30, 40, 0.3);
+  backdrop-filter: blur(10px);
   border-radius: 10px;
   transition: all 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .search-result-item:hover {
@@ -392,14 +413,15 @@ input[type="radio"] {
 /* PLAYER */
 .player {
   margin-top: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
-  background: rgba(24, 24, 32, 0.8);
-  backdrop-filter: blur(10px);
+  background: rgba(24, 24, 32, 0.2);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   color: #e4e4e7;
   padding: 30px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  transition: background-color 1s ease, border-color 1s ease, color 1s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: background-color 1s ease, border-color 1s ease, color 1s ease, backdrop-filter 1s ease;
   text-align: left;
   position: relative;
 }
