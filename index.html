@@ -1,15 +1,83 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Spotify Study Companion</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playlist Slider</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Notification Modal -->
+  <div id="notificationModal" class="modal-overlay">
+    <div id="modalContent" class="modal-content">
+      <h2>Welcome! 🎵</h2>
+      <p>Search for songs and build your playlist</p>
+      <button class="modal-close" onclick="closeModal()">Get Started</button>
+    </div>
+  </div>
 
-<!-- GitHub Pages doesn't support dynamic base paths, Aso we hardcode its -->
+  <div class="container">
+    <!-- LEFT SIDE: Playlist Title & Search -->
+    <div class="left-side">
+      <h1>My Playlist</h1>
+      <p id="songCount">0 Songs</p>
+      
+      <!-- Search Bar -->
+      <div class="search-container">
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="Search for songs..." 
+          class="search-input"
+        />
+        <button id="searchBtn" class="search-btn">🔍</button>
+      </div>
+
+      <!-- Search Results -->
+      <div id="searchResults" class="search-results"></div>
+    </div>
+
+    <!-- RIGHT SIDE: Slider & Player -->
+    <div class="right-side">
+      <!-- Radio inputs for slider control (dynamically generated) -->
+      <div id="radioInputs"></div>
+
+      <!-- Card Slider -->
+      <div class="cards" id="cardsContainer">
+        <!-- Cards will be dynamically generated -->
+      </div>
+
+      <!-- Player -->
+      <div class="player">
+        <div id="playerContent">
+          <!-- Song info will be dynamically generated -->
+          <div class="empty-playlist">
+            <p>Your playlist is empty</p>
+            <p class="empty-subtitle">Search for songs to get started!</p>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls" id="controlsContainer" style="display: none;">
+          <button id="prev">◀◀</button>
+          <button id="pause">▐▐</button>
+          <button id="next">▶▶</button>
+        </div>
+
+        <!-- Favorite Button -->
+        <div class="extra-controls" id="extraControls" style="display: none;">
+          <button id="favorite" class="favorite-btn">♡</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden audio element -->
+  <audio id="audioPlayer" preload="metadata"></audio>
+
+  <script src="script.js"></script>
+</body>
+</html>
