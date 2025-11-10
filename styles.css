@@ -33,7 +33,7 @@ body {
   max-width: 1200px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 50px;
   opacity: 0;
   animation: fadeIn 0.8s ease forwards;
@@ -51,6 +51,7 @@ body {
   flex-shrink: 0;
   text-align: center;
   padding-right: 20px;
+  width: 350px;
 }
 
 .left-side h1 {
@@ -72,6 +73,158 @@ body {
   color: #6b7280;
   transition: color 1s ease;
   opacity: 0.8;
+}
+
+/* Search Container */
+.search-container {
+  margin-top: 30px;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: 'Inter', sans-serif;
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #667eea;
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.search-btn {
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.search-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.search-btn:active {
+  transform: translateY(0);
+}
+
+/* Search Results */
+.search-results {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 20px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  padding: 10px;
+}
+
+.search-results::-webkit-scrollbar {
+  width: 6px;
+}
+
+.search-results::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.search-results::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 10px;
+}
+
+.search-results::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.5);
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.search-result-item:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.result-image {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.result-info {
+  flex: 1;
+  text-align: left;
+}
+
+.result-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.result-artist {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.result-duration {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.add-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.add-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.add-btn:active {
+  transform: scale(0.95);
+}
+
+.loading, .no-results, .error {
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.95rem;
 }
 
 /* RIGHT SIDE */
@@ -144,37 +297,6 @@ input[type="radio"] {
   transform: scale(1.05);
 }
 
-/* SLIDER LOGIC (5 songs) */
-#item-1:checked ~ .cards #song-5,
-#item-2:checked ~ .cards #song-1,
-#item-3:checked ~ .cards #song-2,
-#item-4:checked ~ .cards #song-3,
-#item-5:checked ~ .cards #song-4 {
-  transform: translateX(-45%) scale(0.75) rotateY(15deg);
-  opacity: 0.3;
-  z-index: 0;
-}
-
-#item-1:checked ~ .cards #song-2,
-#item-2:checked ~ .cards #song-3,
-#item-3:checked ~ .cards #song-4,
-#item-4:checked ~ .cards #song-5,
-#item-5:checked ~ .cards #song-1 {
-  transform: translateX(45%) scale(0.75) rotateY(-15deg);
-  opacity: 0.3;
-  z-index: 0;
-}
-
-#item-1:checked ~ .cards #song-1,
-#item-2:checked ~ .cards #song-2,
-#item-3:checked ~ .cards #song-3,
-#item-4:checked ~ .cards #song-4,
-#item-5:checked ~ .cards #song-5 {
-  transform: translateX(0) scale(1) rotateY(0deg);
-  opacity: 1;
-  z-index: 1;
-}
-
 /* PLAYER */
 .player {
   margin-top: 20px;
@@ -190,8 +312,25 @@ input[type="radio"] {
   position: relative;
 }
 
+.empty-playlist {
+  text-align: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+}
+
+.empty-playlist p {
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+.empty-subtitle {
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
 .song-info {
   display: none;
+  position: relative;
 }
 
 .song-info.active {
@@ -210,12 +349,38 @@ input[type="radio"] {
   }
 }
 
+.remove-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  opacity: 0.7;
+}
+
+.remove-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  opacity: 1;
+  transform: scale(1.1);
+}
+
 .song-info .title {
   font-size: 1.8rem;
   font-weight: 700;
   margin-bottom: 8px;
   transition: color 1s ease;
   letter-spacing: -0.01em;
+  padding-right: 40px;
 }
 
 /* Song Details Row */
@@ -353,6 +518,29 @@ input[type="radio"] {
   background: rgba(239, 68, 68, 0.1);
 }
 
+/* Notification */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  color: #1f2937;
+  font-weight: 500;
+  z-index: 10000;
+  transform: translateX(400px);
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.notification.show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
 /* MODAL */
 .modal-overlay {
   position: fixed;
@@ -445,6 +633,7 @@ input[type="radio"] {
   }
 
   .left-side {
+    width: 100%;
     padding-right: 0;
   }
 
@@ -498,5 +687,8 @@ input[type="radio"] {
   .song-info .title {
     font-size: 1.5rem;
   }
-}
 
+  .search-results {
+    max-height: 300px;
+  }
+}
