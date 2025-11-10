@@ -101,7 +101,7 @@ const Login = () => {
       
       // If we get here and result is null, getAccessToken should have redirected
       // But if we're still here, the redirect didn't work
-      console.warn('⚠️ Redirect should have happened but we're still here')
+      console.warn('Redirect should have happened but we are still here')
       console.log('Auth URL was:', url)
       alert('Redirect failed. Please try clicking the direct link below or copy the URL manually.')
     } catch (error) {
