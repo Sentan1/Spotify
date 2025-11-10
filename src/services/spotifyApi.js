@@ -1,8 +1,19 @@
 // Spotify API Service
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID || ''
 // For GitHub Pages, use the full URL including pathname
-const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 
-  (window.location.origin + window.location.pathname.replace(/\/$/, ''))
+// Make sure it ends with / for GitHub Pages
+const getRedirectUri = () => {
+  if (import.meta.env.VITE_SPOTIFY_REDIRECT_URI) {
+    return import.meta.env.VITE_SPOTIFY_REDIRECT_URI
+  }
+  // Auto-detect for GitHub Pages
+  const origin = window.location.origin
+  const pathname = window.location.pathname
+  // Ensure it ends with / for GitHub Pages
+  const basePath = pathname.endsWith('/') ? pathname : pathname + '/'
+  return origin + basePath
+}
+const REDIRECT_URI = getRedirectUri()
 const SCOPES = 'user-read-private user-read-email user-read-playback-state user-modify-playback-state streaming user-read-currently-playing'
 
 // Get access token from URL hash
@@ -76,18 +87,37 @@ export const getAccessToken = () => {
   console.log('🔄 Preparing to redirect to Spotify...')
   console.log('CLIENT_ID:', `${CLIENT_ID.substring(0, 8)}...`)
   console.log('REDIRECT_URI:', REDIRECT_URI)
+  console.log('Encoded REDIRECT_URI:', encodeURIComponent(REDIRECT_URI))
   console.log('Full Auth URL:', authUrl)
+  console.log('URL length:', authUrl.length)
+  
+  // Verify the URL is valid
+  try {
+    new URL(authUrl)
+    console.log('✅ Auth URL is valid')
+  } catch (e) {
+    console.error('❌ Auth URL is invalid:', e)
+    alert('Invalid redirect URL. Please check your configuration.')
+    return null
+  }
+  
   console.log('Redirecting NOW...')
   
-  // Force immediate redirect - don't wait
-  // Use window.location.href as it's most reliable
+  // Store redirect attempt in sessionStorage for debugging
+  sessionStorage.setItem('spotify_redirect_attempt', JSON.stringify({
+    timestamp: Date.now(),
+    redirectUri: REDIRECT_URI,
+    clientId: CLIENT_ID.substring(0, 8) + '...'
+  }))
+  
+  // Force immediate redirect
   window.location.href = authUrl
   
-  // If that doesn't work, try these fallbacks
+  // Fallback after a short delay (shouldn't execute if redirect works)
   setTimeout(() => {
-    console.warn('First redirect attempt may have failed, trying window.location.replace...')
+    console.warn('⚠️ Redirect may have failed, trying window.location.replace...')
     window.location.replace(authUrl)
-  }, 50)
+  }, 100)
   
   return null
 }
