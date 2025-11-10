@@ -1,5 +1,5 @@
 import { Music } from 'lucide-react'
-import { getAccessToken, getStoredToken } from '../services/spotifyApi'
+import { getAccessToken, getStoredToken, isSpotifyConfigured } from '../services/spotifyApi'
 
 const Login = () => {
   const handleLogin = () => {
@@ -8,6 +8,8 @@ const Login = () => {
       getAccessToken()
     }
   }
+
+  const isConfigured = isSpotifyConfigured()
 
   return (
     <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-spotify-green via-spotify-dark to-black">
@@ -23,15 +25,33 @@ const Login = () => {
         <p className="text-gray-300 mb-8 text-lg">
           Connect to Spotify to access millions of songs
         </p>
-        <button
-          onClick={handleLogin}
-          className="w-full py-4 px-8 bg-spotify-green hover:bg-[#1ed760] text-black font-bold rounded-full transition-all transform hover:scale-105 shadow-lg shadow-spotify-green/50 text-lg"
-        >
-          Login with Spotify
-        </button>
-        <p className="text-gray-400 text-sm mt-6">
-          You'll be redirected to Spotify to authorize this app
-        </p>
+        {!isConfigured ? (
+          <div className="w-full py-4 px-8 bg-red-600 text-white font-bold rounded-full text-lg mb-4">
+            ⚠️ Spotify Client ID Not Configured
+          </div>
+        ) : (
+          <button
+            onClick={handleLogin}
+            className="w-full py-4 px-8 bg-spotify-green hover:bg-[#1ed760] text-black font-bold rounded-full transition-all transform hover:scale-105 shadow-lg shadow-spotify-green/50 text-lg"
+          >
+            Login with Spotify
+          </button>
+        )}
+        {!isConfigured ? (
+          <div className="text-red-400 text-sm mt-4 space-y-2">
+            <p>Please configure your Spotify Client ID:</p>
+            <ol className="list-decimal list-inside text-left space-y-1">
+              <li>Go to GitHub → Settings → Secrets → Actions</li>
+              <li>Add secret: <code className="bg-black/30 px-1 rounded">VITE_SPOTIFY_CLIENT_ID</code></li>
+              <li>Add your Spotify Client ID as the value</li>
+              <li>Redeploy the app</li>
+            </ol>
+          </div>
+        ) : (
+          <p className="text-gray-400 text-sm mt-6">
+            You'll be redirected to Spotify to authorize this app
+          </p>
+        )}
       </div>
     </div>
   )

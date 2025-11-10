@@ -44,6 +44,13 @@ export const isTokenExpired = () => {
 
 // Get access token
 export const getAccessToken = () => {
+  // Check if CLIENT_ID is configured
+  if (!CLIENT_ID || CLIENT_ID.trim() === '') {
+    console.error('Spotify Client ID is not configured. Please set VITE_SPOTIFY_CLIENT_ID environment variable.')
+    alert('Spotify Client ID is not configured. Please check your environment variables or GitHub Secrets.')
+    return null
+  }
+  
   const token = getTokenFromUrl() || getStoredToken()
   
   if (token && !isTokenExpired()) {
@@ -55,6 +62,11 @@ export const getAccessToken = () => {
   const authUrl = `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}`
   window.location.href = authUrl
   return null
+}
+
+// Check if Spotify is configured
+export const isSpotifyConfigured = () => {
+  return CLIENT_ID && CLIENT_ID.trim() !== ''
 }
 
 // Make API request
